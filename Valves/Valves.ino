@@ -20,6 +20,11 @@
 // DEFINES
 // Flag to toggle debugging output
 // #define DEBUG
+// #define ALLOW_UNSOLVE
+
+#define SNDUP 0
+#define SNDDOWN 1
+#define SNDSOLVED 4
 
 // There are only *9* LEDs in each strip representing the numbers 1-9.
 // No need for 10 LEDs, because for the digit 0 all the LEDs are simply turned off!
@@ -31,9 +36,16 @@ const byte potPins[] = {A0, A1, A2};
 // The total number of valves
 const byte numPots = 3;
 // The level to which each valve must be set to solve the puzzle
-const int solution[numPots] = {5, 2, 9};
+const int solution[numPots] = {9, 2, 5};
 // This digital pin will be driven LOW to release a lock when puzzle is solved
 const byte lockPin = A5;
+// sound pins. These just set digital pins to high/low for a certain short period to trigger soundboard
+const byte sndUpPin = 2;
+const byte sndDownPin = 3;
+const byte sndSolvedPin = 6;
+const int soundTriggerPeriod = 100; // ms
+// Specific colors for the different strips
+const uint8_t stripHue[numPots] = {HUE_ORANGE, HUE_RED, HUE_GREEN};
 // NOTE: the pins to which the LED strips are connected is hardcoded in setup, not here.
 
 // GLOBALS
@@ -71,6 +83,9 @@ void onSolve() {
   
   // Release the lock
   digitalWrite(lockPin, LOW);
+  // Play sound indicating puzzle is solved
+  delay(1000);
+  triggerSound(SNDSOLVED, 0);
   
   puzzleState = Solved;
 }
@@ -113,6 +128,14 @@ void setup(){
   pinMode(lockPin, OUTPUT);
   digitalWrite(lockPin, HIGH);
 
+  // Setup the sound pins
+  pinMode(sndUpPin, OUTPUT);
+  digitalWrite(sndUpPin, HIGH);
+  pinMode(sndDownPin, OUTPUT);
+  digitalWrite(sndDownPin, HIGH);
+  pinMode(sndSolvedPin, OUTPUT);
+  digitalWrite(sndSolvedPin, HIGH);
+
   // Initialise some random noise values to add variety to the LED colours
   //noiseOffset[0] = random16();
   //noiseOffset[1] = random16();
@@ -139,6 +162,28 @@ long map2(long x, long in_min, long in_max, long out_min, long out_max) {
         return (x - in_min) * (out_max - out_min+1) / (in_max - in_min+1) + out_min;
 }
 
+void triggerSound(int soundType, int value) {
+  byte soundPin;
+  switch(soundType) {
+    case SNDUP:
+      soundPin = sndUpPin;
+      break;
+    case SNDDOWN:
+      soundPin = sndDownPin;
+      break;
+    case SNDSOLVED:
+      soundPin = sndSolvedPin;
+      break;
+    default:
+      return; // no sound
+  }
+  digitalWrite(soundPin, LOW);
+  if (soundType != SNDSOLVED) { // keep signal low (loop sound) when SOLVED
+    delay(soundTriggerPeriod);
+    digitalWrite(soundPin, HIGH);
+  }
+}
+
 /**
  *  Read the input from the potentiometers and store in the currentReadings array
  */
@@ -151,8 +196,17 @@ void getInput() {
     int scaledValue = map2(rawValue, 0, 1023, 0, numLEDsInEachStrip);
     // To ensure we don't get any dodgy values, constrain the output range too
     scaledValue = constrain(scaledValue, 0, numLEDsInEachStrip);
+
+    // Play sound depending on change in value
+    if (scaledValue > currentReadings[i]) {
+      triggerSound(SNDUP, scaledValue);
+    } else if (scaledValue < currentReadings[i]) {
+      triggerSound(SNDDOWN, scaledValue);
+    }
+
     // Store the scaled value in the currentReadings array
     currentReadings[i] = scaledValue;
+    
     // Print some debug information
     #ifdef DEBUG
       Serial.print("Valve ");
@@ -173,7 +227,7 @@ void setDisplay(int style = 0) {
 
   // Fill the noise array with values
   // The first parameter determines the speed and the second the scale of the generated noise. Try playing with them!
-  fillnoise8(5, 255);
+  fillnoise8(3, 128);
   
   // Clear the LEDs
   FastLED.clear();
@@ -191,7 +245,7 @@ void setDisplay(int style = 0) {
         case 1:
           // Blue hue but with some variation in hue and brightness
           leds[i][x] = CHSV(
-            150 + (int)(noise[i][x]>>2),
+            stripHue[i] + (int)(noise[i][x]>>2),
             255,
             constrain(16 + (2<<x) + (int)(noise[i][x]>>1), 0, 255)
           );
@@ -232,14 +286,15 @@ void loop(){
       break;
       
     case Solved:
-    setDisplay(0);
-    /*
-      getInput();
       setDisplay(0);
-      if (!checkIfPuzzleSolved()){
-        onUnsolve();
-      }
-      */
+      #ifdef ALLOW_UNSOLVE
+        getInput();
+        setDisplay(0);
+        if (!checkIfPuzzleSolved()){
+          onUnsolve();
+        }
+      #endif
+      
       break;
   }
 }
