@@ -20,7 +20,9 @@ const byte relayPin = 2;
 // These are based on 8-bit scale, where 255 = full deflection to the right, 128 = midpoint
 const int targetValues[] = {191, 191, 191, 191};
 // How much tolerance either side of target value will we still consider to be correct?
-const int tolerance = 10;
+const int toleranceOutput = 10;
+// How much threshold on input around zero before input is valid for a solution?
+const int thresholdZeroInput = 20;
 
 // GLOBALS
 // We'll store all the inputs and outputs in arrays
@@ -43,7 +45,7 @@ void setup() {
   // Print some useful debug output - the filename and compilation time
   Serial.println(__FILE__ " Created:" __DATE__ " " __TIME__);
 
-	// Initialise the pins
+  // Initialise the pins
   for(int i=0; i<4; i++) {
     pinMode(meterPins[i], OUTPUT);
     pinMode(ledPins[i], OUTPUT);
@@ -66,11 +68,13 @@ void loop() {
     }
 
     // Now we'll retrieve slider value again, and store in inputValues array
-    inputValues[i] = analogRead(sliderPins[i]);
+    // RVG: since our sliders are upside-down we invert the inputs to assure 0=low position
+    //      and 1023=high position
+    inputValues[i] = 1023 - analogRead(sliderPins[i]);
   }
 
   // CALCULATE LOGIC
-	// Apply rules to determine output values from (one or more) inputs
+  // Apply rules to determine output values from (one or more) inputs
   // You can apply any rules you want - the following are just some examples
   
   // Output is the biggest of two input values
@@ -80,44 +84,57 @@ void loop() {
   outputValues[1] = abs(inputValues[1] - inputValues[3]);
 
   // Output is the average of two input values
-	outputValues[2] = (inputValues[2] + inputValues[3]) / 2;
+  outputValues[2] = (inputValues[2] + inputValues[3]) / 2;
  
   // Output is the minimum of two input values
-	outputValues[3] = min(inputValues[2], inputValues[3]);
+  outputValues[3] = min(inputValues[2], inputValues[3]);
 
-	// DISPLAY OUTPUT VALUES AND CHECK AGAINST TARGET
+  // DISPLAY OUTPUT VALUES AND CHECK AGAINST TARGET
   // Start by assuming that all meters are correct
+  // RVG: Added functionality: A meter is only correct if its input with the same index
+  //      is not zero (including some threshold)
+  //      Rationale: we don't want any solutions where inputs are untouched
   bool allMetersCorrect = true;
   // Loop over each output
-	for(int i=0; i<4; i++){
+  for(int i=0; i<4; i++){
     // Rescale from the 10-bit 0-1023 range of the ADC input to 8-bit 0-255 of PWM output
     //outputValues[i] = map(outputValues[i], 0, 1010, 0, 255);
     outputValues[i] = map2(outputValues[i], 0, 1023, 0, 255);
     outputValues[i] = constrain(outputValues[i], 0, 255);    
     // Write the output to the ammeter
-		analogWrite(meterPins[i], outputValues[i]); 
+    analogWrite(meterPins[i], outputValues[i]); 
 
     // If this meter lies outside the allowed tolerance
-    if(abs(outputValues[i] - targetValues[i]) > tolerance) {
+    if(abs(outputValues[i] - targetValues[i]) > toleranceOutput) {
       // All meters are not correct
       allMetersCorrect = false;
       // Turn this LED off
       digitalWrite(ledPins[i], LOW);
     }
     else {
-      // Turn the LED on
-      digitalWrite(ledPins[i], HIGH);
+      // RVG: if the input with same index as output is small (within threshold)
+      //      => solution not correct
+      if (inputValues[i] - thresholdZeroInput <= 0) {
+        // not correct
+      allMetersCorrect = false;
+        // Turn this LED off
+        digitalWrite(ledPins[i], LOW);
+      }
+      else {
+        // Turn the LED on
+        digitalWrite(ledPins[i], HIGH);
+      }
     }
-	}
+  }
 
   // CHECK SOLUTION
   // If we get this far and allMetersCorrect is still true, every value must have been within accepted tolerance
-	if(allMetersCorrect && !isSolved) {
-  	// Solve code here
+  if(allMetersCorrect && !isSolved) {
+    // Solve code here
     Serial.println("Solved!");
     isSolved = true;
     digitalWrite(relayPin, LOW);
-	}
+  }
  // If the puzzle had been solved, but now the meters are no longer correct
   else if(isSolved && !allMetersCorrect) {
     Serial.println("Unsolved!");
