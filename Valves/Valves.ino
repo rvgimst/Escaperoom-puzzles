@@ -38,6 +38,7 @@ const byte numPots = 3;
 // The level to which each valve must be set to solve the puzzle
 const int solution[numPots] = {9, 2, 5};
 // This digital pin will be driven LOW to release a lock when puzzle is solved
+const int hystThreshold = 30; 
 const byte lockPin = A5;
 // sound pins. These just set digital pins to high/low for a certain short period to trigger soundboard
 const byte sndUpPin = 2;
@@ -110,7 +111,9 @@ void onUnsolve() {
 void setup(){
   Serial.begin(9600);
   Serial.println(__FILE__ " Created:" __DATE__ " " __TIME__);
-
+  
+  randomSeed(analogRead(7)); 
+  
   // Set the linear pot pins as input
   for(int i=0; i<numPots; i++){
     // Set the pin for the pot
@@ -188,14 +191,36 @@ void triggerSound(int soundType, int value) {
  *  Read the input from the potentiometers and store in the currentReadings array
  */
 void getInput() {
+  int scaledValue;
   // Read the value from the pots
   for(int i=0; i<numPots; i++){
+    #ifdef DEBUG
+      Serial.print("Valve ");
+      Serial.print(i);
+    #endif
     // Get the "raw" input, which is a value from 0-1023
     int rawValue = analogRead(potPins[i]);
+    
+    //rawValue += random(-10, 10); // for testing with hysteresis
+    //rawValue = constrain(rawValue, 0, 1023);
+
     // Scale the value to the number of LEDs in each strip
-    int scaledValue = map2(rawValue, 0, 1023, 0, numLEDsInEachStrip);
+    // take into account hysteresis for determining up or down movement of scaled value
+    int hystLowRawValue  = constrain(rawValue - hystThreshold, 0, 1023);
+    int hystHighRawValue = constrain(rawValue + hystThreshold, 0, 1023);
+    int scaledValueDown = map2(hystHighRawValue, 0, 1023, 0, numLEDsInEachStrip);
+    int scaledValueUp   = map2(hystLowRawValue, 0, 1023, 0, numLEDsInEachStrip);
     // To ensure we don't get any dodgy values, constrain the output range too
-    scaledValue = constrain(scaledValue, 0, numLEDsInEachStrip);
+    scaledValueDown = constrain(scaledValueDown, 0, numLEDsInEachStrip);
+    scaledValueUp   = constrain(scaledValueUp, 0, numLEDsInEachStrip);
+    if (scaledValueDown < currentReadings[i]) { // Change below hysteresis threshold
+      scaledValue = scaledValueDown;
+    } else if (scaledValueUp > currentReadings[i]) { // Change above hysteresis threshold
+      scaledValue = scaledValueUp;
+    } else {
+      // no change of output/scaled value
+      scaledValue = currentReadings[i];
+    }
 
     // Play sound depending on change in value
     if (scaledValue > currentReadings[i]) {
@@ -209,8 +234,6 @@ void getInput() {
     
     // Print some debug information
     #ifdef DEBUG
-      Serial.print("Valve ");
-      Serial.print(i);
       Serial.print(" raw:");
       Serial.print(rawValue);
       Serial.print(", scaled:");
