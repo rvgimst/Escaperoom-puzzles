@@ -208,7 +208,8 @@ void onSolve() {
   while(true) {
     startIndex = startIndex + 1; /* motion speed */
     colorIndex = startIndex;
-    
+
+    // RvG added pattern that flows over tracks consistently from L->R according to track layout
 //    for( int i = 0; i < NUM_LEDS; ++i) {
 //        leds[i] = ColorFromPalette( currentPalette, colorIndex, brightness, currentBlending);
     for (int d=MAX_NUM_LEDS_PER_TRACK-1; d>=0; --d) {
@@ -221,13 +222,14 @@ void onSolve() {
       colorIndex += 2;
     }
 
-    currentTime = millis();
-    if (currentTime - lastTime > 1000 * paletteTimeInterval) {
-      lastTime = currentTime;
-      currentPaletteIdx++;
-      if (currentPaletteIdx == numPalettes) currentPaletteIdx = 0;// recycle
-      currentPalette = palettes[currentPaletteIdx];
-    }  
+//    RVG: only for testing palettes
+//    currentTime = millis();
+//    if (currentTime - lastTime > 1000 * paletteTimeInterval) {
+//      lastTime = currentTime;
+//      currentPaletteIdx++;
+//      if (currentPaletteIdx == numPalettes) currentPaletteIdx = 0;// recycle
+//      currentPalette = palettes[currentPaletteIdx];
+//    }  
     
     // === confetti ===
     // random colored speckles that blink in and fade smoothly
@@ -255,6 +257,7 @@ void onSolve() {
 void loop() {
 
   // For debug use only, print out the state of each toggle switch
+  Serial.print("status switches: ");
   for(int i=0; i<numSwitchPins; i++){
     Serial.print(digitalRead(switchPins[i]));
     if(i<numSwitchPins-1) { Serial.print(","); }
@@ -332,7 +335,7 @@ void loop() {
     }
     totalScore += score[i];
   }
-  if(totalScore == 0 /*15*/) {
+  if(totalScore == 0 /*15 RVG changed for testing*/) {
     onSolve();
   }
  
