@@ -16,23 +16,26 @@
  * "distance travelled" along the track to reach that point.
  *
  * ==== LAYOUT ESCAPE FROM THE PAST, MD, US ====
+ * NOTE: directions on junctions (left/right) below correspond to the physical puzzle when watched from the back of the board
+ * NOTE2: 5 LEDs indicated with [*] are redundant LEDs that take no part in/are excluded from the puzzle
+ * 
  * Distance Travelled
  *  0   1   2   3    4    5    6    7    8    9    10   11   12   13   14   15   16   17   18   19   20   21   22   23   24   25   26   27   28   29   30   31   32   33   34   35   36   37
- *                                                                                             (Track 4)
- *                            [6]  [7]  [8]  [9]  [10] [11] [12] [13] [14] [15] [16] [17] [18] [19] [20] 
+ *                                                                                                 (Track 4) GREEN
+ *                            [66] [67] [68*][69] [70] [71] [72] [73] [74] [75] [76] [77] [78] [79*][80] [81] [82]
  *                          /
- *                  [4]  [5] (Switch 1)
- *                 /        \                                                                  (Track 3)
- *                /           [35] [34] [33] [32] [31] [30] [29] [28] [27] [26] [25] [24] [23] [22] [21]
- * [0] [1] [2] [3] (Switch 0)                                                                                                                         (Track 2)
- *               |                                                                        [50] [51] [52] [53] [54] [55] [56] [57] [58] [59] [60] [61] [62] [63]
+ *                  [47] [48] (Switch 2)
+ *                 /        \                                                                      (Track 3) YELLOW
+ *                /           [49] [50] [51] [52] [53] [54] [55] [56] [57] [58] [59*][60] [61] [62] [63] [64] [65*]
+ * [0] [1] [2] [3] (Switch 0)                                                                                                                          (Track 2) BLUE
+ *               |                                                                        [32] [33] [34] [35] [36] [37] [38] [39] [40] [41] [42] [43] [44] [45] [46*]
  *               |                                                                       /
- *                \                                    [43] [44] [45] [46] [47] [48] [49] (Switch 3)
- *                 \                                  /                                  \                              (Track 1)
- *                  |                                /                                    [64] [65] [66] [67] [68] [69] [70] [71]
- *                  [36] [37] [38] [39] [40] [41] [42] (Switch 2)                                            
- *                                                    \               (Track 0)
- *                                                     [76] [75] [74] [73] [72] 
+ *                \                                    [16] [17] [18] [19] [20] [21] [22] (Switch 3)
+ *                 \                                  /                                  \                                (Track 1) RED
+ *                  |                                /                                    [23] [24] [25] [26] [27] [28] [29] [30*][31]
+ *                  [4]  [5]  [6]  [7]  [8]  [9]  [10] (Switch 1)                                            
+ *                                                    \         (Track 0) WHITE
+ *                                                     [11] [12] [13] [14] [15] 
  *
  */
 
@@ -46,7 +49,7 @@
 #define COLOR_ORDER GRB
 #define BRIGHTNESS  64
 // The total number of LEDs across all track segments
-#define NUM_LEDS 77
+#define NUM_LEDS 83
 // The greatest number of LEDs on any given track down which a particle can travel
 #define MAX_NUM_LEDS_PER_TRACK 40
 // for palette on solving the puzzle
@@ -79,28 +82,29 @@ const byte switchPins[numSwitchPins] = { 2, 3, 4, 5 };
 // The maximum number of particles that will be alive at any one time
 const byte maxParticles = 10;
 // Number of milliseconds between each particle being spawned
-const int _rate = 4000;
+const int _rate = 1000; //4000;
 // How many different types of particle are there?
 const byte numParticleTypes = 5;
 // Define a colour associated with each type of particle
 const CRGB colours[numParticleTypes] = { CRGB::White, CRGB::Red, CRGB::Blue, CRGB::Yellow, CRGB::Green};
 // Specify the order in which LEDs are traversed down each possible track from start to finish. -1 indicates beyond the end of the track
 const unsigned int ledTrack[numParticleTypes][MAX_NUM_LEDS_PER_TRACK] = {
-  // LHS
-  {0,  1,  2,  3, 36, 37, 38, 39, 40, 41, 42, 76, 75, 74, 73, 72, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-  {0,  1,  2,  3, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 64, 65, 66, 67, 68, 69, 70, 71, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-  {0,  1,  2,  3, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, -1, -1, -1, -1, -1, -1, -1, -1},
-  {0,  1,  2,  3,  4,  5, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-  {0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
-  // RHS
+  // LHS (ref to front of the board)
+  // NOTE: LEDs that were indicated above with an [*] are omitted here
+  {0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+  {0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 31, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+  {0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 16, 17, 18, 19, 20, 21, 22, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, -1, -1, -1, -1, -1, -1, -1, -1},
+  {0,  1,  2,  3, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 60, 61, 62, 63, 64, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+  {0,  1,  2,  3, 47, 48, 66, 67, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 80, 81, 82, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
+  // RHS (ref to front of the board)
 };
 // Specify which LEDs should be used as a score counter for each track
 const unsigned int scoreLEDs[numParticleTypes][3] = {
-  {72, 73, 74},
-  {71, 70, 69},
-  {63, 62, 61},
-  {21, 22, 23},
-  {20, 19, 18}
+  {15, 14, 13},
+  {30, 29, 28},
+  {45, 44, 43},
+  {64, 63, 62},
+  {82, 81, 80}
 };
 
 // GLOBALS
@@ -178,7 +182,7 @@ void spawnParticle(){
     if(!particlePool[i].alive){
       // Reset it as a new particle
       particlePool[i].position = 0;
-      particlePool[i].speed = 2;//10; // between 1-16
+      particlePool[i].speed = 10; // between 1-16
       particlePool[i].type = random(0, 5);
       particlePool[i].length = particlePool[i].type + 1;
       particlePool[i].track = 0;
@@ -261,12 +265,12 @@ void onSolve() {
 
 void loop() {
   // For debug use only, print out the state of each toggle switch
-  Serial.print("status switches: ");
+  //Serial.print("status switches: ");
   for(int i=0; i<numSwitchPins; i++){
-    Serial.print(digitalRead(switchPins[i]));
-    if(i<numSwitchPins-1) { Serial.print(","); }
+    //Serial.print(digitalRead(switchPins[i]));
+    //if(i<numSwitchPins-1) { Serial.print(","); }
   }
-  Serial.println("");
+  //Serial.println("");
  
   // Clear the LEDs
   FastLED.clear();
@@ -286,24 +290,28 @@ void loop() {
    
     // Only if it's alive!
     if(particlePool[i].alive){
-
-      // RVG: dont forget to change these if track layout changes
+      Serial.print("random=");
+      Serial.println(random(2));
       // RVG: use the LED index of the switch locations (where the tracks split)
       // If the particle is on one of the switch points, change track as appropriate
       if(particlePool[i].position/16 == 3) {
-        particlePool[i].track = (digitalRead(switchPins[0])) ? 0 : 3;
+        //particlePool[i].track = (digitalRead(switchPins[0])) ? 0 : 3;
+        particlePool[i].track = (random(2)) ? 0 : 3; // RVG for testing
       }
-      // If we took a left at the first junction then we come across the next switch after in total 10 LEDs
+      // If we took a left (front side) at the first junction then we come across the next switch after in total 10 LEDs
       if(particlePool[i].position/16 == 10 && particlePool[i].track < 3) {
-        particlePool[i].track = (digitalRead(switchPins[1])) ? 0 : 1;
+        //particlePool[i].track = (digitalRead(switchPins[1])) ? 0 : 1;
+        particlePool[i].track = (random(2)) ? 0 : 1; // RVG for testing
       }
-      // If we took a right at the first junction then we come aross the next switch after 5 LEDs
+      // If we took a right (front side) at the first junction then we come aross the next switch after 5 LEDs
       if(particlePool[i].position/16 == 5 && particlePool[i].track >= 3) {
-        particlePool[i].track = (digitalRead(switchPins[2])) ? 3 : 4;
+        //particlePool[i].track = (digitalRead(switchPins[2])) ? 3 : 4;
+        particlePool[i].track = (random(2)) ? 3 : 4; // RVG for testing
       }
       // If we went left, then right, there's a final junction after 17 LEDs
       if(particlePool[i].position/16 == 17 && particlePool[i].track == 1) {
-        particlePool[i].track = (digitalRead(switchPins[3])) ? 1 : 2;
+        //particlePool[i].track = (digitalRead(switchPins[3])) ? 1 : 2;
+        particlePool[i].track = (random(2)) ? 1 : 2; // RVG for testing
       }
 
       // Move along the current track
