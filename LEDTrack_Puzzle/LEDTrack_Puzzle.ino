@@ -21,7 +21,7 @@
  * 
  * Distance Travelled
  *  0   1   2   3    4    5    6    7    8    9    10   11   12   13   14   15   16   17   18   19   20   21   22   23   24   25   26   27   28   29   30   31   32   33   34   35   36   37
- *                                                                                                 (Track 4) GREEN
+ *                                                                                                 (Track 4) RED
  *                            [66] [67] [68*][69] [70] [71] [72] [73] [74] [75] [76] [77] [78] [79*][80] [81] [82]
  *                          /
  *                  [47] [48] (Switch 2)
@@ -31,7 +31,7 @@
  *               |                                                                        [32] [33] [34] [35] [36] [37] [38] [39] [40] [41] [42] [43] [44] [45] [46*]
  *               |                                                                       /
  *                \                                    [16] [17] [18] [19] [20] [21] [22] (Switch 3)
- *                 \                                  /                                  \                                (Track 1) RED
+ *                 \                                  /                                  \                                (Track 1) GREEN
  *                  |                                /                                    [23] [24] [25] [26] [27] [28] [29] [30*][31]
  *                  [4]  [5]  [6]  [7]  [8]  [9]  [10] (Switch 1)                                            
  *                                                    \         (Track 0) WHITE
@@ -82,11 +82,11 @@ const byte switchPins[numSwitchPins] = { 2, 3, 4, 5 };
 // The maximum number of particles that will be alive at any one time
 const byte maxParticles = 10;
 // Number of milliseconds between each particle being spawned
-const int _rate = 1000; //4000;
+const int _rate = 5000;
 // How many different types of particle are there?
 const byte numParticleTypes = 5;
 // Define a colour associated with each type of particle
-const CRGB colours[numParticleTypes] = { CRGB::White, CRGB::Red, CRGB::Blue, CRGB::Yellow, CRGB::Green};
+const CRGB colours[numParticleTypes] = { CRGB::White, CRGB::Green, CRGB::Blue, CRGB::Yellow, CRGB::Red};
 // Specify the order in which LEDs are traversed down each possible track from start to finish. -1 indicates beyond the end of the track
 const unsigned int ledTrack[numParticleTypes][MAX_NUM_LEDS_PER_TRACK] = {
   // LHS (ref to front of the board)
@@ -101,7 +101,7 @@ const unsigned int ledTrack[numParticleTypes][MAX_NUM_LEDS_PER_TRACK] = {
 // Specify which LEDs should be used as a score counter for each track
 const unsigned int scoreLEDs[numParticleTypes][3] = {
   {15, 14, 13},
-  {30, 29, 28},
+  {31, 29, 28},
   {45, 44, 43},
   {64, 63, 62},
   {82, 81, 80}
@@ -182,7 +182,7 @@ void spawnParticle(){
     if(!particlePool[i].alive){
       // Reset it as a new particle
       particlePool[i].position = 0;
-      particlePool[i].speed = 10; // between 1-16
+      particlePool[i].speed = 1; // between 1-16
       particlePool[i].type = random(0, 5);
       particlePool[i].length = particlePool[i].type + 1;
       particlePool[i].track = 0;
@@ -280,7 +280,7 @@ void loop() {
 
   // Has it been too long since the last time we spawned a particle?
   if(currentTime > _lastSpawned + _rate){
-    Serial.println("Time to spawn!");
+    //Serial.println("Time to spawn!");
     spawnParticle();
     _lastSpawned = currentTime;
   }
@@ -290,28 +290,28 @@ void loop() {
    
     // Only if it's alive!
     if(particlePool[i].alive){
-      Serial.print("random=");
-      Serial.println(random(2));
+      //Serial.print("random=");
+      //Serial.println(random(2));
       // RVG: use the LED index of the switch locations (where the tracks split)
       // If the particle is on one of the switch points, change track as appropriate
       if(particlePool[i].position/16 == 3) {
-        //particlePool[i].track = (digitalRead(switchPins[0])) ? 0 : 3;
-        particlePool[i].track = (random(2)) ? 0 : 3; // RVG for testing
+        particlePool[i].track = (digitalRead(switchPins[0])) ? 0 : 3;
+        //particlePool[i].track = (random(2)) ? 0 : 3; // RVG for testing
       }
       // If we took a left (front side) at the first junction then we come across the next switch after in total 10 LEDs
       if(particlePool[i].position/16 == 10 && particlePool[i].track < 3) {
-        //particlePool[i].track = (digitalRead(switchPins[1])) ? 0 : 1;
-        particlePool[i].track = (random(2)) ? 0 : 1; // RVG for testing
+        particlePool[i].track = (digitalRead(switchPins[1])) ? 0 : 1;
+        //particlePool[i].track = (random(2)) ? 0 : 1; // RVG for testing
       }
       // If we took a right (front side) at the first junction then we come aross the next switch after 5 LEDs
       if(particlePool[i].position/16 == 5 && particlePool[i].track >= 3) {
-        //particlePool[i].track = (digitalRead(switchPins[2])) ? 3 : 4;
-        particlePool[i].track = (random(2)) ? 3 : 4; // RVG for testing
+        particlePool[i].track = (digitalRead(switchPins[2])) ? 3 : 4;
+        //particlePool[i].track = (random(2)) ? 3 : 4; // RVG for testing
       }
       // If we went left, then right, there's a final junction after 17 LEDs
       if(particlePool[i].position/16 == 17 && particlePool[i].track == 1) {
-        //particlePool[i].track = (digitalRead(switchPins[3])) ? 1 : 2;
-        particlePool[i].track = (random(2)) ? 1 : 2; // RVG for testing
+        particlePool[i].track = (digitalRead(switchPins[3])) ? 1 : 2;
+        //particlePool[i].track = (random(2)) ? 1 : 2; // RVG for testing
       }
 
       // Move along the current track
