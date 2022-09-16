@@ -3,17 +3,21 @@
 //////////////////////
 // FastLED variables
 //////////////////////
-#define NUM_FLEDS 60 // best to have multiple of 12
+#define NUM_FLEDS_IN   72  // best to have multiple of 12
+#define NUM_FLEDS_OUT 108  // best to have multiple of 12
+#define NUM_FLEDS NUM_FLEDS_IN + NUM_FLEDS_OUT
 #define DATA_PIN A0
 #define LED_TYPE WS2811
 #define COLOR_ORDER GRB
 #define BRIGHTNESS_HI 60
 #define BRIGHTNESS_LO 20
-CRGB fastleds[NUM_FLEDS];
+CRGB fastleds[NUM_FLEDS]; // All LEDs in 1 array
+byte ringStartIdx[2] = { 0, NUM_FLEDS_IN };
+byte ringNumLeds[2]  = { NUM_FLEDS_IN, NUM_FLEDS_OUT };
 
 // for correct distribution of red/blue colors around the rings
-#define RINGDIVIDER 12;
-byte numLEDsInPattern = NUM_FLEDS/RINGDIVIDER;
+#define RINGDIVIDER 12
+byte numLEDsInPattern[2] = { NUM_FLEDS_IN/RINGDIVIDER, NUM_FLEDS_OUT/RINGDIVIDER };
 
 // for fade-in effect when mirror in startup phase
 bool fadeIn = true;
@@ -21,16 +25,17 @@ byte dynamicBrightnessLevel = 0;
 
 // for smooth motion of the ring pattern
 uint8_t speed = 2; // used for stepping to next pattern position (between 1-16)
-int patternPosition = 0; // virtual position of the pattern (16 positions == 1 pixel)
-int blendrate = 0;
-int blenddirection = 1;
+int patternPosition[2] = { 0, 0 }; // virtual position of the pattern (16 positions == 1 pixel). Each ring has its own patternPosition
+int blendrate = 0; // for pulsating LEDs
+int blenddirection = 1; // unused yet
 
 //////////////////////////////
 // Magnetic Switch variables
 //////////////////////////////
 const byte numProps = 3;
 const byte numMagSwitchPins = 2; // number of switches per prop
-const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 6}, {7, 8}, {9, 9} }; // We use 1 switch for the fuse
+const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 5}, {7, 7}, {9, 9} }; // We use 1 switch for the fuse
+byte LastPinStatus[numProps][numMagSwitchPins] = { {HIGH, HIGH}, {HIGH, HIGH}, {HIGH, HIGH} };
 #define PROP_P1_IDX 0
 #define PROP_P2_IDX 1
 #define PROP_FUSE_IDX 2
@@ -88,19 +93,24 @@ void setup() {
   FastLED.show();
 }
 
-bool isPowerSourceActivated(byte src) {
-  // 'src' indicates the power source to be tested
-  // Assume power source is activated until detected otherwise
-  bool powerActivated = true;
-  byte id = (src == 0 ? PROP_P1_IDX : PROP_P2_IDX); // make sure only valid values are triggered in arrays
-  
+bool isPropActivated(byte id) {
+  // 'id' indicates the prop to be tested
+  // Assume prop is activated until detected otherwise
+  bool propActivated = true;
+  byte pinStatus;
+
   for (int i=0; i < numMagSwitchPins; i++) { 
-    // check the Power Source
-    powerActivated &= !digitalRead(MagSwitchPins[id][i]);
+    // check the magnetic switches
+    pinStatus = digitalRead(MagSwitchPins[id][i]);
+    propActivated &= !pinStatus;
+    if (pinStatus != LastPinStatus[id][i]) {
+      LastPinStatus[id][i] = pinStatus;
+      Serial.println((String)"SwitchPin " + MagSwitchPins[id][i] + " changed to " + pinStatus);
+    }
   }
 
   // For testing with LEDs
-  if (powerActivated) {
+  if (propActivated) {
     // LED on
     //Serial.println((String)"P" + id + " activated...");
     digitalWrite(leds[id], HIGH);
@@ -110,28 +120,24 @@ bool isPowerSourceActivated(byte src) {
     digitalWrite(leds[id], LOW);
   }
 
-  return powerActivated;
+  return propActivated;
 }
 
-bool isFuseActivated() {
-  // Assume fuse activated until detected otherwise
-  bool fuseActivated = true;
-  for (int i=0; i < numMagSwitchPins; i++) { 
-    // check the Fuse
-    fuseActivated &= !digitalRead(MagSwitchPins[PROP_FUSE_IDX][i]);
-  }
-  return fuseActivated;
-}
-
-void StartPulsatingFastLEDs(byte maxBrightness) {
+void FillRingPattern(byte rId) {
   // own pattern of LEDs: red every 5 LEDS, others blue
-  for (int i=0; i<NUM_FLEDS; i++) {
-    if (i % numLEDsInPattern == 0) {
+  for (int i = ringStartIdx[rId]; i < ringStartIdx[rId] + ringNumLeds[rId]; i++) {
+    if ((i-ringStartIdx[rId]) % numLEDsInPattern[rId] == 0) {
       fastleds[i] = CRGB::Red;
     } else {
       fastleds[i] = CRGB::Blue;
     }
   }
+}
+
+void RunPulsatingFastLEDs(byte maxBrightness) {
+  // TODO: should only be done once
+  FillRingPattern(0); 
+  FillRingPattern(1); 
 
   if (fadeIn) { // first we want to fade in the LED strip
     EVERY_N_MILLISECONDS(20) {
@@ -163,30 +169,31 @@ void StartPulsatingFastLEDs(byte maxBrightness) {
   }
 }
 
-void StartRotatingFastLEDS() {
+void RunRotatingFastLEDS(byte rId) {
   EVERY_N_MILLISECONDS(10) {
     // advance pattern 1 step. (16 steps corresponds to 1 complete pixel shift)
-    patternPosition += speed;
+    patternPosition[rId] += speed;
     // Extract the 'fractional' part of the position - that is, what proportion are we into the front-most pixel (in 1/16ths)
-    uint8_t frac = patternPosition % 16;
-    for (int i=0; i<NUM_FLEDS; i++) {
-      if (patternPosition == NUM_FLEDS*16) {
-        patternPosition = 0;
+    uint8_t frac = patternPosition[rId] % 16;
+    for (int i=0; i<ringNumLeds[rId]; i++) {
+      if (patternPosition[rId] == ringNumLeds[rId]*16) {
+        patternPosition[rId] = 0;
       }
       // calculate shifted index, looping around
-      byte ledidx = (i + patternPosition/16) % NUM_FLEDS;
+      byte ledidx = (i + patternPosition[rId]/16) % ringNumLeds[rId];
        
-      if (i % numLEDsInPattern == 0) { // red pixel turning blue
-        fastleds[ledidx] = blend(CRGB::Red, CRGB::Blue, frac*16);
-      } else if (i % numLEDsInPattern == 1){ // blue pixel in front of red turning red
-        fastleds[ledidx] = blend(CRGB::Blue, CRGB::Red, frac*16);
+      if (i % numLEDsInPattern[rId] == 0) { // red pixel turning blue
+        fastleds[ledidx + ringStartIdx[rId]] = blend(CRGB::Red, CRGB::Blue, frac*16);
+      } else if (i % numLEDsInPattern[rId] == 1){ // blue pixel in front of red turning red
+        fastleds[ledidx + ringStartIdx[rId]] = blend(CRGB::Blue, CRGB::Red, frac*16);
       } else { // other pixels are blue
-        fastleds[ledidx] = CRGB::Blue;
+        fastleds[ledidx + ringStartIdx[rId]] = CRGB::Blue;
       }
     }
     FastLED.show();
   }
 }
+
 void ResetFastLEDs() {
   // turn off led strip
   //FastLED.setBrightness(0);
@@ -197,26 +204,23 @@ void ResetFastLEDs() {
 }
 
 void loop() {
-  //Serial.println((String)"STATE=" + state);
-  //StartPulsatingFastLEDs();
-
   switch (state) {
     case 0:
       ResetFastLEDs(); // Reset LED strip in state0
-      if ((isPowerSourceActivated(PROP_P1_IDX) && !isPowerSourceActivated(PROP_P2_IDX)) ||
-          (!isPowerSourceActivated(PROP_P1_IDX) && isPowerSourceActivated(PROP_P2_IDX))) {
+      if ((isPropActivated(PROP_P1_IDX) && !isPropActivated(PROP_P2_IDX)) ||
+          (!isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX))) {
         state = 1;
         Serial.println("P1 XOR P2 ACTIVATED. State 0 -> State 1");
       }
       break;
     case 1:
       // PLAY DIM PULSATING LEDs
-      StartPulsatingFastLEDs(BRIGHTNESS_LO);
-      if (isPowerSourceActivated(PROP_P1_IDX) && isPowerSourceActivated(PROP_P2_IDX)) {
+      RunPulsatingFastLEDs(BRIGHTNESS_LO);
+      if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
         state = 2;
         Serial.println("P1 AND P2 ACTIVATED. State 1 -> State 2");
       }
-      else if (!isPowerSourceActivated(PROP_P1_IDX) && !isPowerSourceActivated(PROP_P2_IDX)) {
+      else if (!isPropActivated(PROP_P1_IDX) && !isPropActivated(PROP_P2_IDX)) {
         state = 0;
         onetime = true;
         Serial.println("NO POWER ACTIVE. State 1 -> State 0");      
@@ -224,21 +228,19 @@ void loop() {
       break;
     case 2:
       // PLAY BRIGHT PULSATING LEDs
-      StartPulsatingFastLEDs(BRIGHTNESS_HI);
+      RunPulsatingFastLEDs(BRIGHTNESS_HI);
       // PLAY SOUND 1 (ONCE) - TBD
       
-      if (isPowerSourceActivated(PROP_P1_IDX) && isPowerSourceActivated(PROP_P2_IDX)) {
-        if (isFuseActivated()) {
-          digitalWrite(leds[PROP_FUSE_IDX], HIGH);
+      if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
+        if (isPropActivated(PROP_FUSE_IDX)) {
           state = 3;
           onetime = true;
           Serial.println("in STATE 2, FUSE activated. State 2 -> State 3");
           // PLAY SOUND 2 // ONCE
           // RELEASE DOOR // ONCE
         } else {
-          digitalWrite(leds[PROP_FUSE_IDX], LOW);
           if (onetime) {
-            Serial.println("in STATE 1, FUSE INACTIVE");
+            Serial.println("in STATE 2, FUSE INACTIVE");
             onetime = false;
           }
         }
@@ -254,7 +256,8 @@ void loop() {
         onetime = false;
       }
       // PLAY ROTATING LEDs
-      StartRotatingFastLEDS();
+      RunRotatingFastLEDS(0);
+      RunRotatingFastLEDS(1);
       break;
   }
 }
