@@ -3,42 +3,44 @@
 //////////////////////
 // FastLED variables
 //////////////////////
-#define NUM_FLEDS_IN   72  // best to have multiple of 12
-#define NUM_FLEDS_OUT 108  // best to have multiple of 12
-#define NUM_FLEDS NUM_FLEDS_IN + NUM_FLEDS_OUT
+#define NUM_FLEDS_IN   72  // Inner ring - best to have multiple of 12
+#define NUM_FLEDS_OUT 108  // Outer ring - best to have multiple of 12
+#define NUM_FLEDS NUM_FLEDS_IN + NUM_FLEDS_OUT // we address 1 LED strip for both rings
 #define DATA_PIN A0
 #define LED_TYPE WS2811
 #define COLOR_ORDER GRB
 #define BRIGHTNESS_HI 60
 #define BRIGHTNESS_LO 20
 CRGB fastleds[NUM_FLEDS]; // All LEDs in 1 array
-byte ringStartIdx[2] = { 0, NUM_FLEDS_IN };
-byte ringNumLeds[2]  = { NUM_FLEDS_IN, NUM_FLEDS_OUT };
+byte ringStartIdx[2] = { 0, NUM_FLEDS_IN }; // on which pixel does each ring start?
+byte ringNumLeds[2]  = { NUM_FLEDS_IN, NUM_FLEDS_OUT }; // num LEDs per ring
 
-// for correct distribution of red/blue colors around the rings
+// We want a distribution of 12 red/blue colors (clock) around the rings
+// eacht ring has a different pattern since the number of LEDs per ring differs
 #define RINGDIVIDER 12
 byte numLEDsInPattern[2] = { NUM_FLEDS_IN/RINGDIVIDER, NUM_FLEDS_OUT/RINGDIVIDER };
 
-// for fade-in effect when mirror in startup phase
-bool fadeIn = true;
-byte dynamicBrightnessLevel = 0;
+// for mirror LEDs in pulsating phase
+bool fadeIn = true; // for fade-in effect
+byte dynamicBrightnessLevel = 0; // fade-in start with dark pixels
 
-// for smooth motion of the ring pattern
-uint8_t speed = 2; // used for stepping to next pattern position (between 1-16)
-int patternPosition[2] = { 0, 0 }; // virtual position of the pattern (16 positions == 1 pixel). Each ring has its own patternPosition
-int blendrate = 0; // for pulsating LEDs
-int blenddirection = 1; // unused yet
+// for smooth motion of the ring pattern in rotating phase
+// To have both rings move parallel they need different speeds, Factor = NUM_FLEDS_OUT/NUM_FLEDS_IN
+byte speed[2] = { 2, 3 }; // used for stepping to next pattern position (between 1-16)
+                           // negative indicates counter clockwise movement
+int patternPosition[2] = { 0, 0 }; // virtual position of the pattern (16 positions == 1 pixel) per ring
 
 //////////////////////////////
 // Magnetic Switch variables
 //////////////////////////////
-const byte numProps = 3;
-const byte numMagSwitchPins = 2; // number of switches per prop
-const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 5}, {7, 7}, {9, 9} }; // We use 1 switch for the fuse
-byte LastPinStatus[numProps][numMagSwitchPins] = { {HIGH, HIGH}, {HIGH, HIGH}, {HIGH, HIGH} };
 #define PROP_P1_IDX 0
 #define PROP_P2_IDX 1
 #define PROP_FUSE_IDX 2
+const byte numProps = 3; // 2 power source props, 1 fuse prop
+const byte numMagSwitchPins = 2; // number of switches per prop
+const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 5}, {7, 7}, {9, 9} }; // We use 1 switch for the fuse
+//const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 6}, {7, 8}, {9, 9} }; // We use 1 switch for the fuse
+byte LastPinStatus[numProps][numMagSwitchPins] = { {HIGH, HIGH}, {HIGH, HIGH}, {HIGH, HIGH} };
 
 // LEDs - 1 for each prop (for testing)
 const byte leds[numProps] = { 2, 3, 4 };
@@ -172,7 +174,7 @@ void RunPulsatingFastLEDs(byte maxBrightness) {
 void RunRotatingFastLEDS(byte rId) {
   EVERY_N_MILLISECONDS(10) {
     // advance pattern 1 step. (16 steps corresponds to 1 complete pixel shift)
-    patternPosition[rId] += speed;
+    patternPosition[rId] += speed[rId];
     // Extract the 'fractional' part of the position - that is, what proportion are we into the front-most pixel (in 1/16ths)
     uint8_t frac = patternPosition[rId] % 16;
     for (int i=0; i<ringNumLeds[rId]; i++) {
