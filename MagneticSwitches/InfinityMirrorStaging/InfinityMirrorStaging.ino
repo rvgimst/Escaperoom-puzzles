@@ -1,22 +1,20 @@
 #include<FastLED.h>
 
 // FastLED variables
-#define NUM_FLEDS 60
+#define NUM_FLEDS 180
 #define DATA_PIN A0
 #define LED_TYPE WS2811
 #define COLOR_ORDER GRB
 #define BRIGHTNESS 60
 CRGB fastleds[NUM_FLEDS];
 
-#define RINGDIVIDER 12;
+#define RINGDIVIDER 24;
 byte numLEDsInPattern = NUM_FLEDS/RINGDIVIDER;
 bool fadeIn = true;
 byte dynamicBrightnessLevel = 0;
 int patternPosition = 0; //for simple shifting of LEDs
 int blendrate = 0;
 int blenddirection = 1;
-
-byte state = 1;
 
 void setup() {
   // Start a serial connection
@@ -35,14 +33,14 @@ void StartPulsatingFastLEDs() {
   // own pattern of LEDs: red every 5 LEDS, others blue
   for (int i=0; i<NUM_FLEDS; i++) {
     if (i % numLEDsInPattern == 0) {
-      fastleds[i] = CRGB::Red;
+      fastleds[i] = CRGB::Green;
     } else {
-      fastleds[i] = CRGB::Blue;
+      fastleds[i] = CRGB::Green;
     }
   }
 
   if (fadeIn) { // first we want to fade in the LED strip
-    EVERY_N_MILLISECONDS(20) {
+    EVERY_N_MILLISECONDS(40) {
       FastLED.setBrightness(dynamicBrightnessLevel++);
       FastLED.show();
       if (dynamicBrightnessLevel == BRIGHTNESS) {
@@ -71,9 +69,9 @@ void StartPulsatingFastLEDs() {
   }
 }
 
-uint8_t speed = 2; // between 1-16
+uint8_t speed = 3; // between 1-16
 
-void StartRotatingFastLEDS() {
+void StartRotatingFastLEDS0() {
   EVERY_N_MILLISECONDS(10) {
     // advance pattern 1 step. (16 steps corresponds to 1 complete pixel shift)
     patternPosition += speed;
@@ -92,6 +90,89 @@ void StartRotatingFastLEDS() {
         fastleds[ledidx] = blend(CRGB::Blue, CRGB::Red, frac*16);
       } else { // other pixels are blue
         fastleds[ledidx] = CRGB::Blue;
+      }
+    }
+    FastLED.show();
+  }
+}
+
+void StartRotatingFastLEDS1() {
+  EVERY_N_MILLISECONDS(10) {
+    // advance pattern 1 step. (16 steps corresponds to 1 complete pixel shift)
+    patternPosition += speed;
+    // Extract the 'fractional' part of the position - that is, what proportion are we into the front-most pixel (in 1/16ths)
+    uint8_t frac = patternPosition % 16;
+    for (int i=0; i<NUM_FLEDS; i++) {
+      if (patternPosition == NUM_FLEDS*16) {
+        patternPosition = 0;
+      }
+      // calculate shifted index, looping around
+      byte ledidx = (i + patternPosition/16) % NUM_FLEDS;
+       
+      if (i % numLEDsInPattern <= 1) { // red pixel turning blue
+        fastleds[ledidx] = blend(CRGB::Red, CRGB::Blue, frac*16);
+      } else if (i % numLEDsInPattern == 2){ // blue pixel in front of red turning red
+        fastleds[ledidx] = blend(CRGB::Blue, CRGB::Red, frac*16);
+      } else { // other pixels are blue
+        fastleds[ledidx] = CRGB::Blue;
+      }
+    }
+    FastLED.show();
+  }
+}
+
+byte pos[10];
+byte hue = 0;
+
+// using multiple offset sawtooth waves to create running LED effect
+void StartRotatingFastLEDS2(bool dohue=true) {
+  for (byte i=0; i<10; i++) {
+    pos[i] = map(beat8(20, i*300), 0, 255, 0, NUM_FLEDS - 1);
+    if (dohue) {
+      fastleds[pos[i]] = CHSV(hue, 200, 255);
+    } else {
+      fastleds[pos[i]] = CRGB::Green;
+    }
+  }
+  fadeToBlackBy(fastleds, NUM_FLEDS, 16);
+
+  EVERY_N_MILLISECONDS(30) {
+    hue++;
+    if (hue == 256) hue = 0;
+  }
+  
+  FastLED.show();
+}
+
+// change brightness using fixed pattern
+// Num LEDs in pattern = NUM_FLEDS/RINGDIVIDER
+// first 1/3 of pixels in pattern: bright
+// last 2/3 of pixels in pattern: dim
+byte d = numLEDsInPattern / 3; // divider from bright to dim LEDs in pattern
+#define DIM_VAL 50
+#define BRI_VAL 200
+
+void StartRotatingFastLEDS3() {
+  EVERY_N_MILLISECONDS(10) {
+    // advance pattern 1 step. (16 steps corresponds to 1 complete pixel shift)
+    patternPosition += speed;
+    // Extract the 'fractional' part of the position - that is, what proportion are we into the front-most pixel (in 1/16ths)
+    uint8_t frac = patternPosition % 16;
+    for (int i=0; i<NUM_FLEDS; i++) {
+      if (patternPosition == NUM_FLEDS*16) {
+        patternPosition = 0;
+      }
+      // calculate shifted index, looping around
+      byte ledidx = (i + patternPosition/16) % NUM_FLEDS;
+       
+      if (i % numLEDsInPattern == 0) { // bright pixel in front of dim turning dim
+        fastleds[ledidx] = blend(CHSV(HUE_BLUE, 255, BRI_VAL), CHSV(HUE_GREEN, 255, DIM_VAL), frac*16);
+      } else if (i % numLEDsInPattern == d){ // dim pixel in front of bright turning bright
+        fastleds[ledidx] = blend(CHSV(HUE_GREEN, 255, DIM_VAL), CHSV(HUE_BLUE, 255, BRI_VAL), frac*16);
+      } else if (i % numLEDsInPattern < d) { // bright pixels 
+        fastleds[ledidx] = CHSV(HUE_BLUE, 255, BRI_VAL);
+      } else { // dim pixels
+        fastleds[ledidx] = CHSV(HUE_GREEN, 255, DIM_VAL);
       }
     }
     FastLED.show();
@@ -143,20 +224,36 @@ void ResetFastLEDs() {
   dynamicBrightnessLevel = 0;
 }
 
+#define NUM_STATES 7
+byte state = 0;
+
 void loop() {
   switch (state) {
     case 0:
       StartPulsatingFastLEDs();
       break;
     case 1:
-      StartRotatingFastLEDS();
+      StartColorBlend();
       break;
     case 2:
-      StartColorBlend();
+      StartRotatingFastLEDS0();
+      break;
+    case 3:
+      StartRotatingFastLEDS1();
+      break;
+    case 4:
+      StartRotatingFastLEDS2(false);
+      break;
+    case 5:
+      StartRotatingFastLEDS2(true);
+      break;
+    case 6:
+      StartRotatingFastLEDS3();
       break;
   }
   
-//  EVERY_N_SECONDS(6) {
-//    state = 1;
-//  }
+  EVERY_N_SECONDS(15) {
+    state++;
+    if (state == NUM_STATES) state = 0;
+  }
 }
