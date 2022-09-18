@@ -10,25 +10,14 @@
 #define LED_TYPE WS2811
 #define COLOR_ORDER GRB
 #define BRIGHTNESS_HI 60
-#define BRIGHTNESS_LO 20
+#define BRIGHTNESS_LO 20 // unused
 CRGB fastleds[NUM_FLEDS]; // All LEDs in 1 array
-byte ringStartIdx[2] = { 0, NUM_FLEDS_IN }; // on which pixel does each ring start?
-byte ringNumLeds[2]  = { NUM_FLEDS_IN, NUM_FLEDS_OUT }; // num LEDs per ring
-
-// We want a distribution of 12 red/blue colors (clock) around the rings
-// eacht ring has a different pattern since the number of LEDs per ring differs
-#define RINGDIVIDER 12
-byte numLEDsInPattern[2] = { NUM_FLEDS_IN/RINGDIVIDER, NUM_FLEDS_OUT/RINGDIVIDER };
-
-// for mirror LEDs in pulsating phase
-bool fadeIn = true; // for fade-in effect
-byte dynamicBrightnessLevel = 0; // fade-in start with dark pixels
 
 // for smooth motion of the ring pattern in rotating phase
 // To have both rings move parallel they need different speeds, Factor = NUM_FLEDS_OUT/NUM_FLEDS_IN
-byte speed[2] = { 2, 3 }; // used for stepping to next pattern position (between 1-16)
+//byte speed[2] = { 2, 3 }; // used for stepping to next pattern position (between 1-16)
                            // negative indicates counter clockwise movement
-int patternPosition[2] = { 0, 0 }; // virtual position of the pattern (16 positions == 1 pixel) per ring
+//int patternPosition[2] = { 0, 0 }; // virtual position of the pattern (16 positions == 1 pixel) per ring
 
 //////////////////////////////
 // Magnetic Switch variables
@@ -55,11 +44,19 @@ const byte leds[numProps] = { 2, 3, 4 };
 //  fuse activated: sound + rotating LEDs + opening hatch by... TBD (servo, electromagnet,...?)
 // Logics of the puzzle:
 //  State0 (start): activate electromagnet for door, everything else off
-//   Action: 2 power sources placed correctly (all switches triggered) => State1
-//  State1: Play sound1 once, run pulsating LEDs algorithm
-//   Action: break at least one of the power source switches (eg by moving one out a bit) => State0
-//   Action: fuse placed correctly => State2
-//  State2 (end): Play sound2 once, run rotating LEDs algorithm, deactivate electromagnet
+//   Action: power source 1 placed correctly (all switches triggered) => State1
+//   Action: power source 2 placed correctly (all switches triggered) => State2
+//  State1: Play short sound1 once, run pulsating LEDs algorithm with color of power source 1
+//   Action: break at least one of the power source1 switches (eg by moving src1 out a bit) => State0
+//   Action: power source 2 placed correctly (all switches triggered) => State3
+//  State2: Play short sound1 once, run pulsating LEDs algorithm with color of power source 2
+//   Action: break at least one of the power source2 switches (eg by moving src2 out a bit) => State0
+//   Action: power source 1 placed correctly (all switches triggered) => State3
+//  State3: Play short sound2 once, run pulsating LEDs algorithm with combined color1&color2
+//   Action: break at least one of the power source1 switches (eg by moving src1 out a bit) => State2
+//   Action: break at least one of the power source2 switches (eg by moving src2 out a bit) => State1
+//   Action: fuse placed correctly => State4
+//  State4 (end): Play sound3 continuously, run rotating LEDs algorithm, deactivate electromagnet
 byte state = 0; // start state
 
 bool onetime = true; // to prevent lots of debug output
@@ -125,38 +122,16 @@ bool isPropActivated(byte id) {
   return propActivated;
 }
 
-void FillRingPattern(byte rId) {
-  // own pattern of LEDs: red every 5 LEDS, others blue
-  for (int i = ringStartIdx[rId]; i < ringStartIdx[rId] + ringNumLeds[rId]; i++) {
-    if ((i-ringStartIdx[rId]) % numLEDsInPattern[rId] == 0) {
-      fastleds[i] = CRGB::Red;
-    } else {
-      fastleds[i] = CRGB::Blue;
-    }
+void RunPulsatingFastLEDs(CRGB color) {
+  for (int i=0; i<NUM_FLEDS; i++) {
+    fastleds[i] = color;
   }
-}
 
-void RunPulsatingFastLEDs(byte maxBrightness) {
-  // TODO: should only be done once
-  FillRingPattern(0); 
-  FillRingPattern(1); 
-
-  if (fadeIn) { // first we want to fade in the LED strip
-    EVERY_N_MILLISECONDS(20) {
-      FastLED.setBrightness(dynamicBrightnessLevel++);
-      FastLED.show();
-      if (dynamicBrightnessLevel == maxBrightness) {
-        // fade in complete
-        fadeIn = false;
-        dynamicBrightnessLevel = 0;
-      }
-    }
-  } else {
     // create a sine wave with period of 2 sec (30bpm) to change brightness of the strip
     // and one with 20bpm
     // beatsin8(bpm, minvalue, maxvalue, phase offset, timebase
-    uint8_t sinBeat1 = beatsin8(30, 0, maxBrightness, 0, 0);
-    uint8_t sinBeat2 = beatsin8(60, 0, maxBrightness, 0, 0);
+    uint8_t sinBeat1 = beatsin8(30, 0, 64, 0, 0);
+    uint8_t sinBeat2 = beatsin8(60, 0, 64, 0, 0);
   
     FastLED.setBrightness((sinBeat1 + sinBeat2)/2);
     
@@ -168,32 +143,29 @@ void RunPulsatingFastLEDs(byte maxBrightness) {
 //      Serial.println(sinBeat2);
 //    }
     FastLED.show();
-  }
 }
 
-void RunRotatingFastLEDS(byte rId) {
-  EVERY_N_MILLISECONDS(10) {
-    // advance pattern 1 step. (16 steps corresponds to 1 complete pixel shift)
-    patternPosition[rId] += speed[rId];
-    // Extract the 'fractional' part of the position - that is, what proportion are we into the front-most pixel (in 1/16ths)
-    uint8_t frac = patternPosition[rId] % 16;
-    for (int i=0; i<ringNumLeds[rId]; i++) {
-      if (patternPosition[rId] == ringNumLeds[rId]*16) {
-        patternPosition[rId] = 0;
-      }
-      // calculate shifted index, looping around
-      byte ledidx = (i + patternPosition[rId]/16) % ringNumLeds[rId];
-       
-      if (i % numLEDsInPattern[rId] == 0) { // red pixel turning blue
-        fastleds[ledidx + ringStartIdx[rId]] = blend(CRGB::Red, CRGB::Blue, frac*16);
-      } else if (i % numLEDsInPattern[rId] == 1){ // blue pixel in front of red turning red
-        fastleds[ledidx + ringStartIdx[rId]] = blend(CRGB::Blue, CRGB::Red, frac*16);
-      } else { // other pixels are blue
-        fastleds[ledidx + ringStartIdx[rId]] = CRGB::Blue;
-      }
+byte pos[10];
+byte hue = 0;
+
+// using multiple offset sawtooth waves to create running LED effect
+void RunRotatingFastLEDS(bool dohue=true) {
+  for (byte i=0; i<10; i++) { // 10 sawtooth waves, each offset equidistant
+    pos[i] = map(beat8(20, i*300), 0, 255, 0, NUM_FLEDS - 1);
+    if (dohue) {
+      fastleds[pos[i]] = CHSV(hue, 200, 255);
+    } else {
+      fastleds[pos[i]] = CRGB::Blue;
     }
-    FastLED.show();
   }
+  fadeToBlackBy(fastleds, NUM_FLEDS, 16);
+
+  EVERY_N_MILLISECONDS(30) {
+    hue++;
+    if (hue == 256) hue = 0;
+  }
+  
+  FastLED.show();
 }
 
 void ResetFastLEDs() {
@@ -201,65 +173,71 @@ void ResetFastLEDs() {
   //FastLED.setBrightness(0);
   FastLED.clear();
   FastLED.show();
-  fadeIn = true;
-  dynamicBrightnessLevel = 0;
 }
 
 void loop() {
   switch (state) {
     case 0:
       ResetFastLEDs(); // Reset LED strip in state0
-      if ((isPropActivated(PROP_P1_IDX) && !isPropActivated(PROP_P2_IDX)) ||
-          (!isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX))) {
+      if (isPropActivated(PROP_P1_IDX)) {
         state = 1;
-        Serial.println("P1 XOR P2 ACTIVATED. State 0 -> State 1");
+        Serial.println("P1 ACTIVATED. State 0 -> State 1");
+      } else if (isPropActivated(PROP_P2_IDX)) {
+        state = 2;
+        Serial.println("P2 ACTIVATED. State 0 -> State 2");
       }
       break;
     case 1:
-      // PLAY DIM PULSATING LEDs
-      RunPulsatingFastLEDs(BRIGHTNESS_LO);
+      // PLAY SHORT SOUND 1 ONCE
+      // PLAY PULSATING LEDs in color Power Source 1
+      RunPulsatingFastLEDs(CRGB::Blue);
       if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
-        state = 2;
-        Serial.println("P1 AND P2 ACTIVATED. State 1 -> State 2");
-      }
-      else if (!isPropActivated(PROP_P1_IDX) && !isPropActivated(PROP_P2_IDX)) {
+        state = 3;
+        Serial.println("P1 AND P2 ACTIVATED. State 1 -> State 3");
+      } else if (!isPropActivated(PROP_P1_IDX)) {
         state = 0;
         onetime = true;
         Serial.println("NO POWER ACTIVE. State 1 -> State 0");      
       }
       break;
     case 2:
-      // PLAY BRIGHT PULSATING LEDs
-      RunPulsatingFastLEDs(BRIGHTNESS_HI);
-      // PLAY SOUND 1 (ONCE) - TBD
-      
+      // PLAY SHORT SOUND 1 ONCE
+      // PLAY PULSATING LEDs in color Power Source 2
+      RunPulsatingFastLEDs(CRGB::Yellow);
       if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
-        if (isPropActivated(PROP_FUSE_IDX)) {
-          state = 3;
-          onetime = true;
-          Serial.println("in STATE 2, FUSE activated. State 2 -> State 3");
-          // PLAY SOUND 2 // ONCE
-          // RELEASE DOOR // ONCE
-        } else {
-          if (onetime) {
-            Serial.println("in STATE 2, FUSE INACTIVE");
-            onetime = false;
-          }
-        }
-      } else { // at least one of the power sources is deactivated
+        state = 3;
+        Serial.println("P1 AND P2 ACTIVATED. State 2 -> State 3");
+      } else if (!isPropActivated(PROP_P2_IDX)) {
         state = 0;
         onetime = true;
-        Serial.println("Power DEactivated. State 2 -> State 0");
+        Serial.println("NO POWER ACTIVE. State 2 -> State 0");      
       }
       break;
     case 3:
+      // PLAY SHORT SOUND 2 ONCE
+      // PLAY PULSATING LEDs in combined color Power Sources 1+2
+      RunPulsatingFastLEDs(CRGB::Green);
+      if (!isPropActivated(PROP_P1_IDX)) {
+        state = 2;
+        Serial.println("P1 DEACTIVATED, P2 still ACTIVE. State 3 -> State 2");
+      } else if (!isPropActivated(PROP_P2_IDX)) {
+        state = 1;
+        Serial.println("P2 DEACTIVATED, P1 still ACTIVE. State 3 -> State 1");
+      } else if (isPropActivated(PROP_FUSE_IDX)) {
+        state = 4;
+        Serial.println("FUSE ACTIVATED. State 3 -> State 4");
+      }
+      break;
+    case 4:
+      // PLAY SOUND 3 // CONTINUOUSLY
+      // RELEASE DOOR // ONCE
+      // PLAY ROTATING LEDs
       if (onetime) {
-        Serial.println("In STATE 3 now...");
+        Serial.println("In (END)STATE 4 now...");
         onetime = false;
       }
       // PLAY ROTATING LEDs
-      RunRotatingFastLEDS(0);
-      RunRotatingFastLEDS(1);
+      RunRotatingFastLEDS();
       break;
   }
 }
