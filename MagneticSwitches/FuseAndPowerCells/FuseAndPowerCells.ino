@@ -38,8 +38,8 @@ int patternPosition[2] = { 0, 0 }; // virtual position of the pattern (16 positi
 #define PROP_FUSE_IDX 2
 const byte numProps = 3; // 2 power source props, 1 fuse prop
 const byte numMagSwitchPins = 2; // number of switches per prop
-const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 5}, {7, 7}, {9, 9} }; // We use 1 switch for the fuse
-//const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 6}, {7, 8}, {9, 9} }; // We use 1 switch for the fuse
+//const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 5}, {7, 7}, {9, 9} }; // We use 1 switch for the fuse
+const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 6}, {7, 8}, {9, 9} }; // We use 1 switch for the fuse
 byte LastPinStatus[numProps][numMagSwitchPins] = { {HIGH, HIGH}, {HIGH, HIGH}, {HIGH, HIGH} };
 
 // LEDs - 1 for each prop (for testing)
