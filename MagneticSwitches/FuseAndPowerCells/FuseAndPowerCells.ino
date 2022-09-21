@@ -13,11 +13,38 @@
 #define BRIGHTNESS_LO 20 // unused
 CRGB fastleds[NUM_FLEDS]; // All LEDs in 1 array
 
-// for smooth motion of the ring pattern in rotating phase
-// To have both rings move parallel they need different speeds, Factor = NUM_FLEDS_OUT/NUM_FLEDS_IN
-//byte speed[2] = { 2, 3 }; // used for stepping to next pattern position (between 1-16)
-                           // negative indicates counter clockwise movement
-//int patternPosition[2] = { 0, 0 }; // virtual position of the pattern (16 positions == 1 pixel) per ring
+DEFINE_GRADIENT_PALETTE( Yellow_gp ) {
+    0, 255,255,  0,
+  255, 255,255,  0};
+
+DEFINE_GRADIENT_PALETTE( Blue_gp ) {
+    0,   0,  0, 255,
+  255,   0,  0, 255};
+
+DEFINE_GRADIENT_PALETTE( Green_gp ) {
+    0,  0, 255, 0,
+  255,  0, 255, 0
+};
+   
+// black gradient to start with
+DEFINE_GRADIENT_PALETTE( Black_gp ) {
+    0, 0, 0, 0,
+  255, 0, 0, 0};
+
+uint8_t paletteIndex = -1;
+CRGBPalette16 currentPalette(Black_gp);
+CRGBPalette16 targetPalette(Black_gp);
+
+//////////////////////////////
+// Audio variables
+//////////////////////////////
+#define SNDPROP 0
+#define SNDSOLVED 4
+// sound pins. These just set digital pins to high/low for a certain short period to trigger soundboard
+const byte sndUpPin = 2;
+const byte sndDownPin = 3;
+const byte sndSolvedPin = 6;
+const int soundTriggerPeriod = 100; // ms
 
 //////////////////////////////
 // Magnetic Switch variables
@@ -67,10 +94,18 @@ void setup() {
   Serial.println(__FILE__ " Created:" __DATE__ " " __TIME__);
 
   // Init electromagnet relay
-  // TBD
+  // Set the lock pin as output and secure the lock
+//  pinMode(lockPin, OUTPUT);
+//  digitalWrite(lockPin, HIGH);
 
   // Init audio device
-  // TBD
+  // Setup the sound pins
+//  pinMode(sndUpPin, OUTPUT);
+//  digitalWrite(sndUpPin, HIGH);
+//  pinMode(sndDownPin, OUTPUT);
+//  digitalWrite(sndDownPin, HIGH);
+//  pinMode(sndSolvedPin, OUTPUT);
+//  digitalWrite(sndSolvedPin, HIGH);
   
   // Init magnetic sensor pins
   for (int j=0; j < numProps; j++) {           // the props
@@ -89,6 +124,7 @@ void setup() {
   FastLED.setBrightness(BRIGHTNESS_HI); // set master brightness control
   FastLED.setMaxPowerInVoltsAndMilliamps(5, 500);
   FastLED.clear();
+  fill_palette(fastleds, NUM_FLEDS, paletteIndex, 255/NUM_FLEDS, currentPalette, BRIGHTNESS_HI, NOBLEND);
   FastLED.show();
 }
 
@@ -122,18 +158,17 @@ bool isPropActivated(byte id) {
   return propActivated;
 }
 
-void RunPulsatingFastLEDs(CRGB color) {
-  for (int i=0; i<NUM_FLEDS; i++) {
-    fastleds[i] = color;
-  }
+void RunPulsatingFastLEDs() {
+  fill_palette(fastleds, NUM_FLEDS, paletteIndex, 255/NUM_FLEDS, currentPalette, BRIGHTNESS_HI, NOBLEND);
 
-    // create a sine wave with period of 2 sec (30bpm) to change brightness of the strip
-    // and one with 20bpm
-    // beatsin8(bpm, minvalue, maxvalue, phase offset, timebase
-    uint8_t sinBeat1 = beatsin8(30, 0, 64, 0, 0);
-    uint8_t sinBeat2 = beatsin8(60, 0, 64, 0, 0);
+  // create a sine wave with period of 2 sec (30bpm) to change brightness of the strip
+  // and one with 20bpm
+  // beatsin8(bpm, minvalue, maxvalue, phase offset, timebase
+  uint8_t sinBeat1 = beatsin8(30, 0, 64, 0, 0);
+  uint8_t sinBeat2 = beatsin8(60, 0, 64, 0, 0);
   
-    FastLED.setBrightness((sinBeat1 + sinBeat2)/2);
+  FastLED.setBrightness((sinBeat1 + sinBeat2)/2);
+  FastLED.show();
     
 //    EVERY_N_MILLISECONDS(10) {
 //      Serial.print(sinBeat1 + sinBeat2);
@@ -142,7 +177,6 @@ void RunPulsatingFastLEDs(CRGB color) {
 //      Serial.print(",");
 //      Serial.println(sinBeat2);
 //    }
-    FastLED.show();
 }
 
 byte pos[10];
@@ -169,11 +203,33 @@ void RunRotatingFastLEDS(bool dohue=true) {
 }
 
 void ResetFastLEDs() {
-  // turn off led strip
-  //FastLED.setBrightness(0);
+  // turn off led strip immediately
+  FastLED.setBrightness(0);
   FastLED.clear();
   FastLED.show();
 }
+
+//void triggerSound(int soundType, int value) {
+//  byte soundPin;
+//  switch(soundType) {
+//    case SNDUP:
+//      soundPin = sndUpPin;
+//      break;
+//    case SNDDOWN:
+//      soundPin = sndDownPin;
+//      break;
+//    case SNDSOLVED:
+//      soundPin = sndSolvedPin;
+//      break;
+//    default:
+//      return; // no sound
+//  }
+//  digitalWrite(soundPin, LOW);
+//  if (soundType != SNDSOLVED) { // keep signal low (loop sound) when SOLVED
+//    delay(soundTriggerPeriod);
+//    digitalWrite(soundPin, HIGH);
+//  }
+//}
 
 void loop() {
   switch (state) {
@@ -190,7 +246,8 @@ void loop() {
     case 1:
       // PLAY SHORT SOUND 1 ONCE
       // PLAY PULSATING LEDs in color Power Source 1
-      RunPulsatingFastLEDs(CRGB::Blue);
+      targetPalette = Blue_gp;
+      RunPulsatingFastLEDs();
       if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
         state = 3;
         Serial.println("P1 AND P2 ACTIVATED. State 1 -> State 3");
@@ -203,7 +260,8 @@ void loop() {
     case 2:
       // PLAY SHORT SOUND 1 ONCE
       // PLAY PULSATING LEDs in color Power Source 2
-      RunPulsatingFastLEDs(CRGB::Yellow);
+      targetPalette = Yellow_gp;
+      RunPulsatingFastLEDs();
       if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
         state = 3;
         Serial.println("P1 AND P2 ACTIVATED. State 2 -> State 3");
@@ -216,7 +274,8 @@ void loop() {
     case 3:
       // PLAY SHORT SOUND 2 ONCE
       // PLAY PULSATING LEDs in combined color Power Sources 1+2
-      RunPulsatingFastLEDs(CRGB::Green);
+      targetPalette = Green_gp;
+      RunPulsatingFastLEDs();
       if (!isPropActivated(PROP_P1_IDX)) {
         state = 2;
         Serial.println("P1 DEACTIVATED, P2 still ACTIVE. State 3 -> State 2");
@@ -230,14 +289,17 @@ void loop() {
       break;
     case 4:
       // PLAY SOUND 3 // CONTINUOUSLY
+//      triggerSound(SNDSOLVED, 0);
       // RELEASE DOOR // ONCE
+//      digitalWrite(lockPin, LOW);
       // PLAY ROTATING LEDs
+      RunRotatingFastLEDS();
       if (onetime) {
         Serial.println("In (END)STATE 4 now...");
         onetime = false;
       }
-      // PLAY ROTATING LEDs
-      RunRotatingFastLEDS();
       break;
   }
+
+  nblendPaletteTowardPalette( currentPalette, targetPalette, 80);
 }
