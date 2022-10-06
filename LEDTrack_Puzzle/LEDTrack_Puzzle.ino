@@ -54,6 +54,10 @@
 #define MAX_NUM_LEDS_PER_TRACK 40
 // for palette on solving the puzzle
 #define UPDATES_PER_SECOND 30 //100
+// for state of particles
+#define P_SLEEP 0
+#define P_WAIT  1
+#define P_RUN   2
  
 // STRUCTS
 // We'll define a structure to keep all the related properties of an LED particle together
@@ -70,8 +74,11 @@ struct Particle {
   unsigned int length;
   // What track is the particle currently travelling down?
   int track;
-  // Is this particle currently active?
-  bool alive;
+  // What state is this particle currently in? [SLEEP | WAIT | RUN]
+  // SLEEP: do nothing, inactive
+  // WAIT:  active, first LED of track is lit for predefined #seconds
+  // RUN:   active, particle moves along the track
+  byte state;
 };
 
 // CONSTANTS
@@ -79,10 +86,13 @@ struct Particle {
 const byte numSwitchPins = 4;
 // The GPIO pins to which switches are attached
 const byte switchPins[numSwitchPins] = { 2, 3, 4, 5 };
-// The maximum number of particles that will be alive at any one time
+// The maximum number of particles that will be active (state RUN or WAIT) at any one time
 const byte maxParticles = 10;
 // Number of milliseconds between each particle being spawned
 const int _rate = 5000;
+// Number of milliseconds each particle needs to WAIT
+// NOTE: be sure waiting time is less than time between spawns (_wait <= _rate)
+const int _wait = 4000;
 // How many different types of particle are there?
 const byte numParticleTypes = 5;
 // Define a colour associated with each type of particle
@@ -131,8 +141,8 @@ void setup() {
 
   // Instantiate a reusable pool of particles
   for(int i=0; i<maxParticles; i++) {
-    // Type, position, speed, length, track, alive all set to default values
-    particlePool[i] = Particle{0, 0, 0, 0, 0, false};
+    // Type, position, speed, length, track, state all set to default values
+    particlePool[i] = Particle{0, 0, 0, 0, 0, P_SLEEP};
   }
 
   // Initialise all the input pins
@@ -178,8 +188,8 @@ int setLEDs(Particle p){
 void spawnParticle(){
   // Loop over every element in the particle pool
   for(int i=0; i<maxParticles; i++){
-    // If this particle is not currently alive
-    if(!particlePool[i].alive){
+    // If this particle is not currently active
+    if(particlePool[i].state == P_SLEEP){
       // Reset it as a new particle
       particlePool[i].position = 0;
       particlePool[i].speed = 1; // between 1-16
@@ -195,12 +205,11 @@ void spawnParticle(){
       
       particlePool[i].length = particlePool[i].type + 1;
       particlePool[i].track = 0;
-      particlePool[i].alive = true;
+      particlePool[i].state = P_WAIT;
       return;
     }
   }
 }
-
 
 // This function is triggered when every track has a maximum score
 // Use it to activate a relay/release a maglock etc.
@@ -297,8 +306,8 @@ void loop() {
   // Loop through all the particles
   for(int i = 0; i<maxParticles; i++){
    
-    // Only if it's alive!
-    if(particlePool[i].alive){
+    // Only if it's in state RUN!
+    if(particlePool[i].state == P_RUN){
       //Serial.print("random=");
       //Serial.println(random(2));
       // RVG: use the LED index of the switch locations (where the tracks split)
@@ -329,7 +338,7 @@ void loop() {
       // If the particle has reached the last LED of its track
       if(ledTrack[particlePool[i].track][particlePool[i].position/16] == -1 || particlePool[i].position > NUM_LEDS*16) {
         // Kill it
-        particlePool[i].alive = false;
+        particlePool[i].state = P_SLEEP;
 
         // Did it end in the correct track?
         if(particlePool[i].type == particlePool[i].track && score[particlePool[i].track] < 3) {
@@ -344,9 +353,17 @@ void loop() {
         }
       }
 
-      // Draw the particle (check if *still* alive after moving!)
-      if(particlePool[i].alive) {
+      // Draw the particle (check if *still* RUNning after moving!)
+      if(particlePool[i].state == P_RUN) {
         setLEDs(particlePool[i]);
+      }
+    }
+    else if (particlePool[i].state == P_WAIT) {
+      // turn on LED (WAITing in starting position)
+      leds[0] = colours[particlePool[i].type];
+      // When in WAIT state, only go to RUN after _wait time
+      if(currentTime > _lastSpawned + _wait) {
+        particlePool[i].state = P_RUN;
       }
     }
   }
