@@ -183,7 +183,16 @@ void spawnParticle(){
       // Reset it as a new particle
       particlePool[i].position = 0;
       particlePool[i].speed = 1; // between 1-16
-      particlePool[i].type = random(0, 5);
+
+      // RVG added 5OCT22
+      // Only add particles of types (ie colors) that are still needed to fill (ie score <3)
+      // How: we draw a random type until we draw a type that has not got a full score
+      byte newType;
+      do {
+        newType = random(0, numParticleTypes);
+      } while (score[newType] == 3);
+      particlePool[i].type = newType;
+      
       particlePool[i].length = particlePool[i].type + 1;
       particlePool[i].track = 0;
       particlePool[i].alive = true;
@@ -264,13 +273,13 @@ void onSolve() {
 
 
 void loop() {
-  // For debug use only, print out the state of each toggle switch
+  // For debug use only, print out the state of each toggle switch (show graph with ctrl-shift-M)
   //Serial.print("status switches: ");
-  for(int i=0; i<numSwitchPins; i++){
-    //Serial.print(digitalRead(switchPins[i]));
-    //if(i<numSwitchPins-1) { Serial.print(","); }
-  }
-  //Serial.println("");
+//  for(int i=0; i<numSwitchPins; i++){
+//    Serial.print(digitalRead(switchPins[i]));
+//    if(i<numSwitchPins-1) { Serial.print(","); }
+//  }
+//  Serial.println("");
  
   // Clear the LEDs
   FastLED.clear();
