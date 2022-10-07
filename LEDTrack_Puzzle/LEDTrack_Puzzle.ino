@@ -124,6 +124,8 @@ int score[numParticleTypes] = {0, 0, 0, 0, 0};
 CRGB leds[NUM_LEDS];
 // The time at which a particle was last created
 unsigned long _lastSpawned = 0;
+// The speed with which new particles are spawned. Can be changed run-time
+int _particleSpeed = 1;
 // Rather than create a new object each time we spawn a particle, we'll create a fixed "pool" of particles
 // and re-use them
 Particle particlePool[maxParticles];
@@ -192,7 +194,7 @@ void spawnParticle(){
     if(particlePool[i].state == P_SLEEP){
       // Reset it as a new particle
       particlePool[i].position = 0;
-      particlePool[i].speed = 1; // between 1-16
+      particlePool[i].speed = _particleSpeed; // between 1-16
 
       // RVG added 5OCT22
       // Only add particles of types (ie colors) that are still needed to fill (ie score <3)
@@ -344,12 +346,20 @@ void loop() {
         if(particlePool[i].type == particlePool[i].track && score[particlePool[i].track] < 3) {
           // Increase the score for this track
           score[particlePool[i].track]++;
+          // full score? then speed up next particles
+          if (score[particlePool[i].track] == 3) {
+            _particleSpeed++;
+          }
         }
         // The particle ended in the wrong track
         else if(particlePool[i].type != particlePool[i].track && score[particlePool[i].track] > 0) {
+          // score was full? Then slow down next particles
+          if (score[particlePool[i].track] == 3) {
+            _particleSpeed--;
+          }
           // Reduce score for this track
           // RVG commented out for now - so no degrading of the score
-          //score[particlePool[i].track]--;
+          score[particlePool[i].track]--;
         }
       }
 
@@ -382,5 +392,5 @@ void loop() {
  
   // Update the LED display with the new data
   FastLED.show();
-  FastLED.delay(20);
+  FastLED.delay(40);
 }
