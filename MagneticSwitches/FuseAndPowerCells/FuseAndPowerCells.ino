@@ -38,12 +38,15 @@ CRGBPalette16 targetPalette(Black_gp);
 //////////////////////////////
 // Audio variables
 //////////////////////////////
-#define SNDPROP 0
-#define SNDSOLVED 4
+// defines for sound types
+#define SNDNONE 0
+#define SND1PROP 1
+#define SND2PROPS 2
+#define SNDSOLVED 3
 // sound pins. These just set digital pins to high/low for a certain short period to trigger soundboard
-const byte sndUpPin = 2;
-const byte sndDownPin = 3;
-const byte sndSolvedPin = 6;
+const byte snd1Pin = 2;
+const byte snd2Pin = 3;
+const byte sndSolvedPin = 4;
 const int soundTriggerPeriod = 100; // ms
 
 //////////////////////////////
@@ -54,12 +57,12 @@ const int soundTriggerPeriod = 100; // ms
 #define PROP_FUSE_IDX 2
 const byte numProps = 3; // 2 power source props, 1 fuse prop
 const byte numMagSwitchPins = 2; // number of switches per prop
-//const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 5}, {7, 7}, {9, 9} }; // We use 1 switch for the fuse
+//const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 5}, {7, 7}, {9, 9} }; // For testing, 1 switch for all props
 const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 6}, {7, 8}, {9, 9} }; // We use 1 switch for the fuse
 byte LastPinStatus[numProps][numMagSwitchPins] = { {HIGH, HIGH}, {HIGH, HIGH}, {HIGH, HIGH} };
 
 // LEDs - 1 for each prop (for testing)
-const byte leds[numProps] = { 2, 3, 4 };
+const byte leds[numProps] = { 10, 11, 12 };
 
 // This puzzle consist of 3 props: 2 power sources (prop0 and prop1) and 1 fuse (prop2)
 // Each prop needs to be placed in its corresponding receptor/holder.
@@ -100,12 +103,12 @@ void setup() {
 
   // Init audio device
   // Setup the sound pins
-//  pinMode(sndUpPin, OUTPUT);
-//  digitalWrite(sndUpPin, HIGH);
-//  pinMode(sndDownPin, OUTPUT);
-//  digitalWrite(sndDownPin, HIGH);
-//  pinMode(sndSolvedPin, OUTPUT);
-//  digitalWrite(sndSolvedPin, HIGH);
+  pinMode(snd1Pin, OUTPUT);
+  digitalWrite(snd1Pin, HIGH);
+  pinMode(snd2Pin, OUTPUT);
+  digitalWrite(snd2Pin, HIGH);
+  pinMode(sndSolvedPin, OUTPUT);
+  digitalWrite(sndSolvedPin, HIGH);
   
   // Init magnetic sensor pins
   for (int j=0; j < numProps; j++) {           // the props
@@ -169,7 +172,8 @@ void RunPulsatingFastLEDs() {
   
   FastLED.setBrightness((sinBeat1 + sinBeat2)/2);
   FastLED.show();
-    
+
+//    Debug graph output (for serial plotter)
 //    EVERY_N_MILLISECONDS(10) {
 //      Serial.print(sinBeat1 + sinBeat2);
 //      Serial.print(",");
@@ -209,31 +213,33 @@ void ResetFastLEDs() {
   FastLED.show();
 }
 
-//void triggerSound(int soundType, int value) {
-//  byte soundPin;
-//  switch(soundType) {
-//    case SNDUP:
-//      soundPin = sndUpPin;
-//      break;
-//    case SNDDOWN:
-//      soundPin = sndDownPin;
-//      break;
-//    case SNDSOLVED:
-//      soundPin = sndSolvedPin;
-//      break;
-//    default:
-//      return; // no sound
-//  }
-//  digitalWrite(soundPin, LOW);
-//  if (soundType != SNDSOLVED) { // keep signal low (loop sound) when SOLVED
-//    delay(soundTriggerPeriod);
-//    digitalWrite(soundPin, HIGH);
-//  }
-//}
+void triggerSound(int soundType) {
+  byte soundPin;
+  switch(soundType) {
+    case SND1PROP:
+      soundPin = snd1Pin;
+      break;
+    case SND2PROPS:
+      soundPin = snd2Pin;
+      break;
+    case SNDSOLVED:
+      soundPin = sndSolvedPin;
+      break;
+    default: // SNDNONE
+      return; // no sound
+  }
+  
+  digitalWrite(soundPin, LOW);
+  if (soundType != SNDSOLVED) { // keep signal low (loop sound) when SOLVED
+    delay(soundTriggerPeriod);
+    digitalWrite(soundPin, HIGH);
+  }
+}
 
 void loop() {
   switch (state) {
     case 0:
+      triggerSound(SNDNONE); // RESET SOUND (just to make sure)
       ResetFastLEDs(); // Reset LED strip in state0
       if (isPropActivated(PROP_P1_IDX)) {
         state = 1;
@@ -244,7 +250,7 @@ void loop() {
       }
       break;
     case 1:
-      // PLAY SHORT SOUND 1 ONCE
+      triggerSound(SND1PROP); // PLAY SHORT SOUND 1 ONCE
       // PLAY PULSATING LEDs in color Power Source 1
       targetPalette = Blue_gp;
       RunPulsatingFastLEDs();
@@ -258,7 +264,7 @@ void loop() {
       }
       break;
     case 2:
-      // PLAY SHORT SOUND 1 ONCE
+      triggerSound(SND1PROP); // PLAY SHORT SOUND 1 ONCE
       // PLAY PULSATING LEDs in color Power Source 2
       targetPalette = Yellow_gp;
       RunPulsatingFastLEDs();
@@ -272,7 +278,7 @@ void loop() {
       }
       break;
     case 3:
-      // PLAY SHORT SOUND 2 ONCE
+      triggerSound(SND2PROPS); // PLAY SHORT SOUND 2 ONCE
       // PLAY PULSATING LEDs in combined color Power Sources 1+2
       targetPalette = Green_gp;
       RunPulsatingFastLEDs();
@@ -288,8 +294,7 @@ void loop() {
       }
       break;
     case 4:
-      // PLAY SOUND 3 // CONTINUOUSLY
-//      triggerSound(SNDSOLVED, 0);
+      triggerSound(SNDSOLVED); // PLAY SOUND 3 // CONTINUOUSLY
       // RELEASE DOOR // ONCE
 //      digitalWrite(lockPin, LOW);
       // PLAY ROTATING LEDs
