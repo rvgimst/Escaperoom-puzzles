@@ -50,6 +50,15 @@ const byte sndSolvedPin = 4;
 const int soundTriggerPeriod = 100; // ms
 
 //////////////////////////////
+// Relay variables
+//////////////////////////////
+#define RELAYACTIVATE HIGH  // Fred, change this if needed
+#define RELAYDEACTIVATE LOW // Fred, change this if needed
+#define RELAY1 0
+#define RELAY2 1
+const byte relayPins[2] = { 10, 11 }; // pins used for the relays
+
+//////////////////////////////
 // Magnetic Switch variables
 //////////////////////////////
 #define PROP_P1_IDX 0
@@ -62,7 +71,7 @@ const byte MagSwitchPins[numProps][numMagSwitchPins] = { {5, 6}, {7, 8}, {9, 9} 
 byte LastPinStatus[numProps][numMagSwitchPins] = { {HIGH, HIGH}, {HIGH, HIGH}, {HIGH, HIGH} };
 
 // LEDs - 1 for each prop (for testing)
-const byte leds[numProps] = { 10, 11, 12 };
+//const byte leds[numProps] = { 10, 11, 12 };
 
 // This puzzle consist of 3 props: 2 power sources (prop0 and prop1) and 1 fuse (prop2)
 // Each prop needs to be placed in its corresponding receptor/holder.
@@ -96,10 +105,14 @@ void setup() {
   Serial.begin(9600);
   Serial.println(__FILE__ " Created:" __DATE__ " " __TIME__);
 
-  // Init electromagnet relay
-  // Set the lock pin as output and secure the lock
-//  pinMode(lockPin, OUTPUT);
-//  digitalWrite(lockPin, HIGH);
+  // Init relay
+  // Set the relay pins as output and secure the lock
+  // Initialize to ACTIVATE the relay
+  // When puzzle changes state, relays are being deactivated
+  for (int i=0; i<2; i++) {
+    pinMode(relayPins[i], OUTPUT);
+    digitalWrite(relayPins[i], RELAYACTIVATE);
+  }
 
   // Init audio device
   // Setup the sound pins
@@ -118,9 +131,9 @@ void setup() {
   }
 
   // Init LEDs
-  for (int i=0; i < numProps; i++) {
-    pinMode(leds[i], OUTPUT);
-  }
+//  for (int i=0; i < numProps; i++) {
+//    pinMode(leds[i], OUTPUT);
+//  }
 
   // Init FastLED strip
   FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(fastleds, NUM_FLEDS);
@@ -148,15 +161,15 @@ bool isPropActivated(byte id) {
   }
 
   // For testing with LEDs
-  if (propActivated) {
-    // LED on
-    //Serial.println((String)"P" + id + " activated...");
-    digitalWrite(leds[id], HIGH);
-  } else {
-    // LED off
-    //Serial.println((String)"P" + id + " DEactivated...");
-    digitalWrite(leds[id], LOW);
-  }
+//  if (propActivated) {
+//    // LED on
+//    //Serial.println((String)"P" + id + " activated...");
+//    digitalWrite(leds[id], HIGH);
+//  } else {
+//    // LED off
+//    //Serial.println((String)"P" + id + " DEactivated...");
+//    digitalWrite(leds[id], LOW);
+//  }
 
   return propActivated;
 }
@@ -236,11 +249,24 @@ void triggerSound(int soundType) {
   }
 }
 
+// Set a specific relay to a specific state (ACTIVATE/DEACTIVATE)
+void setRelay(byte relayID, int relayState) {
+  digitalWrite(relayPins[relayID], relayState);
+}
+
+void activateRelays() {
+  // Activate all relays
+  setRelay(RELAY1, RELAYACTIVATE);
+  setRelay(RELAY2, RELAYACTIVATE);
+}
+
 void loop() {
   switch (state) {
     case 0:
       triggerSound(SNDNONE); // RESET SOUND (just to make sure)
+      activateRelays(); // ACTIVATE the relays
       ResetFastLEDs(); // Reset LED strip in state0
+
       if (isPropActivated(PROP_P1_IDX)) {
         state = 1;
         Serial.println("P1 ACTIVATED. State 0 -> State 1");
@@ -251,6 +277,8 @@ void loop() {
       break;
     case 1:
       triggerSound(SND1PROP); // PLAY SHORT SOUND 1 ONCE
+      activateRelays(); // ACTIVATE the relays
+
       // PLAY PULSATING LEDs in color Power Source 1
       targetPalette = Blue_gp;
       RunPulsatingFastLEDs();
@@ -265,6 +293,8 @@ void loop() {
       break;
     case 2:
       triggerSound(SND1PROP); // PLAY SHORT SOUND 1 ONCE
+      activateRelays(); // ACTIVATE the relays
+
       // PLAY PULSATING LEDs in color Power Source 2
       targetPalette = Yellow_gp;
       RunPulsatingFastLEDs();
@@ -279,6 +309,8 @@ void loop() {
       break;
     case 3:
       triggerSound(SND2PROPS); // PLAY SHORT SOUND 2 ONCE
+      setRelay(RELAY1, RELAYDEACTIVATE); // DEACTIVATE relay1
+
       // PLAY PULSATING LEDs in combined color Power Sources 1+2
       targetPalette = Green_gp;
       RunPulsatingFastLEDs();
@@ -295,8 +327,8 @@ void loop() {
       break;
     case 4:
       triggerSound(SNDSOLVED); // PLAY SOUND 3 // CONTINUOUSLY
-      // RELEASE DOOR // ONCE
-//      digitalWrite(lockPin, LOW);
+      setRelay(RELAY2, RELAYDEACTIVATE); // DEACTIVATE relay2
+
       // PLAY ROTATING LEDs
       RunRotatingFastLEDS();
       if (onetime) {
