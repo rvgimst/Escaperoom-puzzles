@@ -48,6 +48,7 @@ const byte snd1Pin = 2;
 const byte snd2Pin = 3;
 const byte sndSolvedPin = 4;
 const int soundTriggerPeriod = 100; // ms
+bool triggeredSound = false; // to make sure sounds are not triggered continuously
 
 //////////////////////////////
 // Relay variables
@@ -238,12 +239,16 @@ void triggerSound(int soundType) {
     case SNDSOLVED:
       soundPin = sndSolvedPin;
       break;
-    default: // SNDNONE
-      return; // no sound
+    default: // SNDNONE: set all pins high (sound stops as soon as it has played)
+      digitalWrite(snd1Pin, HIGH);
+      digitalWrite(snd2Pin, HIGH);
+      digitalWrite(sndSolvedPin, HIGH);
+      return;
   }
-  
-  digitalWrite(soundPin, LOW);
-  if (soundType != SNDSOLVED) { // keep signal low (loop sound) when SOLVED
+
+  if (!triggeredSound) {
+    digitalWrite(soundPin, LOW);
+    triggeredSound = true;
     delay(soundTriggerPeriod);
     digitalWrite(soundPin, HIGH);
   }
@@ -276,7 +281,7 @@ void loop() {
       }
       break;
     case 1:
-      triggerSound(SND1PROP); // PLAY SHORT SOUND 1 ONCE
+      triggerSound(SND1PROP); // PLAY SHORT SOUND 1
       activateRelays(); // ACTIVATE the relays
 
       // PLAY PULSATING LEDs in color Power Source 1
@@ -284,15 +289,17 @@ void loop() {
       RunPulsatingFastLEDs();
       if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
         state = 3;
+        triggeredSound = false;
         Serial.println("P1 AND P2 ACTIVATED. State 1 -> State 3");
       } else if (!isPropActivated(PROP_P1_IDX)) {
         state = 0;
+        triggeredSound = false;
         onetime = true;
         Serial.println("NO POWER ACTIVE. State 1 -> State 0");      
       }
       break;
     case 2:
-      triggerSound(SND1PROP); // PLAY SHORT SOUND 1 ONCE
+      triggerSound(SND1PROP); // PLAY SHORT SOUND 1
       activateRelays(); // ACTIVATE the relays
 
       // PLAY PULSATING LEDs in color Power Source 2
@@ -300,15 +307,17 @@ void loop() {
       RunPulsatingFastLEDs();
       if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
         state = 3;
+        triggeredSound = false;
         Serial.println("P1 AND P2 ACTIVATED. State 2 -> State 3");
       } else if (!isPropActivated(PROP_P2_IDX)) {
         state = 0;
+        triggeredSound = false;
         onetime = true;
         Serial.println("NO POWER ACTIVE. State 2 -> State 0");      
       }
       break;
     case 3:
-      triggerSound(SND2PROPS); // PLAY SHORT SOUND 2 ONCE
+      triggerSound(SND2PROPS); // PLAY SHORT SOUND 2
       setRelay(RELAY1, RELAYDEACTIVATE); // DEACTIVATE relay1
 
       // PLAY PULSATING LEDs in combined color Power Sources 1+2
@@ -316,17 +325,20 @@ void loop() {
       RunPulsatingFastLEDs();
       if (!isPropActivated(PROP_P1_IDX)) {
         state = 2;
+        triggeredSound = false;
         Serial.println("P1 DEACTIVATED, P2 still ACTIVE. State 3 -> State 2");
       } else if (!isPropActivated(PROP_P2_IDX)) {
         state = 1;
+        triggeredSound = false;
         Serial.println("P2 DEACTIVATED, P1 still ACTIVE. State 3 -> State 1");
       } else if (isPropActivated(PROP_FUSE_IDX)) {
         state = 4;
+        triggeredSound = false;
         Serial.println("FUSE ACTIVATED. State 3 -> State 4");
       }
       break;
     case 4:
-      triggerSound(SNDSOLVED); // PLAY SOUND 3 // CONTINUOUSLY
+      triggerSound(SNDSOLVED); // PLAY SOUND 3
       setRelay(RELAY2, RELAYDEACTIVATE); // DEACTIVATE relay2
 
       // PLAY ROTATING LEDs
