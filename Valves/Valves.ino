@@ -39,12 +39,13 @@ const byte numPots = 3;
 const int solution[numPots] = {9, 2, 5};
 // This digital pin will be driven LOW to release a lock when puzzle is solved
 const int hystThreshold = 30; 
-const byte lockPin = A5;
 // sound pins. These just set digital pins to high/low for a certain short period to trigger soundboard
 const byte sndUpPin = 2;
 const byte sndDownPin = 3;
 const byte sndSolvedPin = 6;
 const int soundTriggerPeriod = 100; // ms
+// Relay pin for triggering powering on...anything
+const byte relayPin = 7;
 // Specific colors for the different strips
 const uint8_t stripHue[numPots] = {HUE_ORANGE, HUE_RED, HUE_GREEN};
 // NOTE: the pins to which the LED strips are connected is hardcoded in setup, not here.
@@ -82,10 +83,10 @@ void onSolve() {
     Serial.println("Puzzle has just been solved!");
   #endif
   
-  // Release the lock
-  digitalWrite(lockPin, LOW);
   // Play sound indicating puzzle is solved
   delay(1000);
+  // Trigger the Relay
+  digitalWrite(relayPin, HIGH);
   triggerSound(SNDSOLVED, 0);
   
   puzzleState = Solved;
@@ -99,8 +100,8 @@ void onUnsolve() {
     Serial.println("Puzzle has just become unsolved!");
   #endif
 
-  // Lock the lock again
-  digitalWrite(lockPin, HIGH);
+  // Shut off the relay
+  digitalWrite(relayPin, LOW);
   
   puzzleState = Running;
 }
@@ -127,9 +128,9 @@ void setup(){
   FastLED.addLeds<NEOPIXEL, 9>(leds[1], numLEDsInEachStrip);
   FastLED.addLeds<NEOPIXEL, 8>(leds[2], numLEDsInEachStrip);
  
-  // Set the lock pin as output and secure the lock
-  pinMode(lockPin, OUTPUT);
-  digitalWrite(lockPin, HIGH);
+  // Set the relay pin as output and set to LOW
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW);
 
   // Setup the sound pins
   pinMode(sndUpPin, OUTPUT);

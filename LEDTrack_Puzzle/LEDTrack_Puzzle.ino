@@ -44,6 +44,7 @@
 #include <FastLED.h>
 
 // DEFINES
+#define RELAY_PIN 7
 #define LED_PIN A0
 #define LED_TYPE    WS2812
 #define COLOR_ORDER GRB
@@ -58,7 +59,7 @@
 #define P_SLEEP 0
 #define P_WAIT  1
 #define P_RUN   2
- 
+
 // STRUCTS
 // We'll define a structure to keep all the related properties of an LED particle together
 struct Particle {
@@ -141,6 +142,15 @@ void setup() {
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
   FastLED.setBrightness(BRIGHTNESS);
 
+  // Set the relay pin as output and set to LOW
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, LOW);
+  
+  // FOR TESTING ONLY! TEMP
+  // Trigger the Relay
+  delay(1000);
+  digitalWrite(RELAY_PIN, HIGH);
+  
   // Instantiate a reusable pool of particles
   for(int i=0; i<maxParticles; i++) {
     // Type, position, speed, length, track, state all set to default values
@@ -233,7 +243,10 @@ void onSolve() {
   unsigned long currentTime = millis();
   unsigned long lastTime = currentTime;
   int paletteTimeInterval = 20; // [seconds]
-    
+
+  // Trigger the Relay
+  digitalWrite(RELAY_PIN, HIGH);
+  
   while(true) {
     startIndex = startIndex + 1; /* motion speed */
     colorIndex = startIndex;
