@@ -60,6 +60,22 @@
 #define P_WAIT  1
 #define P_RUN   2
 
+//////////////////////////////
+// Audio variables
+//////////////////////////////
+// defines for sound types
+#define SNDNONE 0
+#define SND_SPAWN 1
+#define SND_SUBACTIVE 2
+#define SND_SUBINACTIVE 3
+#define SND_SOLVED 4
+// sound pins. These just set digital pins to high/low for a certain short period to trigger soundboard
+const byte sndSpawnPin = 10;
+const byte sndSubactivePin = 11;
+//const byte sndSubinactivePin = 4; // for future
+const byte sndSolvedPin = 12;
+const int soundTriggerPeriod = 100; // ms
+
 // STRUCTS
 // We'll define a structure to keep all the related properties of an LED particle together
 struct Particle {
@@ -148,8 +164,16 @@ void setup() {
   
   // FOR TESTING ONLY! TEMP
   // Trigger the Relay
-  delay(1000);
+  delay(3000);
   digitalWrite(RELAY_PIN, HIGH);
+
+  // Init audio. Setup the sound pins
+  pinMode(sndSpawnPin, OUTPUT);
+  digitalWrite(sndSpawnPin, HIGH);
+  pinMode(sndSubactivePin, OUTPUT);
+  digitalWrite(sndSubactivePin, HIGH);
+  pinMode(sndSolvedPin, OUTPUT);
+  digitalWrite(sndSolvedPin, HIGH);
   
   // Instantiate a reusable pool of particles
   for(int i=0; i<maxParticles; i++) {
@@ -196,6 +220,30 @@ int setLEDs(Particle p){
   }
 }
 
+void triggerSound(int soundType) {
+  byte soundPin;
+  switch(soundType) {
+    case SND_SPAWN:
+      soundPin = sndSpawnPin;
+      break;
+    case SND_SUBACTIVE:
+      soundPin = sndSubactivePin;
+      break;
+    case SND_SOLVED:
+      soundPin = sndSolvedPin;
+      break;
+    default: // SNDNONE: set all pins high (sound stops as soon as it has played)
+      digitalWrite(sndSpawnPin, HIGH);
+      digitalWrite(sndSubactivePin, HIGH);
+      digitalWrite(sndSolvedPin, HIGH);
+      return;
+  }
+
+  digitalWrite(soundPin, LOW);
+  delay(soundTriggerPeriod);
+  digitalWrite(soundPin, HIGH);
+}
+
 // Spawn a new particle
 void spawnParticle(){
   // Loop over every element in the particle pool
@@ -218,6 +266,10 @@ void spawnParticle(){
       particlePool[i].length = particlePool[i].type + 1;
       particlePool[i].track = 0;
       particlePool[i].state = P_WAIT;
+      
+      // play SPAWN SOUND
+      triggerSound(SND_SPAWN);
+      
       return;
     }
   }
@@ -246,6 +298,9 @@ void onSolve() {
 
   // Trigger the Relay
   digitalWrite(RELAY_PIN, HIGH);
+
+  // play SOLVED SOUND
+  triggerSound(SND_SOLVED);
   
   while(true) {
     startIndex = startIndex + 1; /* motion speed */
@@ -295,6 +350,13 @@ void onSolve() {
   }
 }
 
+byte calculateTotalScore() {
+  byte totalScore = 0;
+  for(int i=0; i<5; i++){
+    totalScore += score[i];
+  }
+  return totalScore;
+}
 
 void loop() {
   // For debug use only, print out the state of each toggle switch (show graph with ctrl-shift-M)
@@ -359,9 +421,12 @@ void loop() {
         if(particlePool[i].type == particlePool[i].track && score[particlePool[i].track] < 3) {
           // Increase the score for this track
           score[particlePool[i].track]++;
-          // full score? then speed up next particles
+          // full score? then speed up next particles and play SOUND SUBACTIVE
           if (score[particlePool[i].track] == 3) {
             _particleSpeed++;
+            if (calculateTotalScore() < 15) { // only play SUBACTIVE SOUND when puzzle is not solved
+              triggerSound(SND_SUBACTIVE);
+            }
           }
         }
         // The particle ended in the wrong track
@@ -369,6 +434,7 @@ void loop() {
           // score was full? Then slow down next particles
           if (score[particlePool[i].track] == 3) {
             _particleSpeed--;
+//            triggerSound(SND_SUBINACTIVE);
           }
           // Reduce score for this track
           // RVG commented out for now - so no degrading of the score
@@ -392,14 +458,14 @@ void loop() {
   }
 
   // Light up the final LEDs in each track corresponding to the corresponding "score"
-  byte totalScore = 0;
   for(int i=0; i<5; i++){
     for(int j=0; j<score[i]; j++){
       leds[scoreLEDs[i][j]] += colours[i];
     }
-    totalScore += score[i];
   }
-  if(totalScore == 15 /*15 RVG changed for testing*/) {
+
+  // check total score and if puzzle is solved
+  if(calculateTotalScore() == 15 /*15 RVG changed for testing*/) {
     onSolve();
   }
  
