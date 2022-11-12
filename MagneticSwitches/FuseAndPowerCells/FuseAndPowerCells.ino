@@ -40,24 +40,28 @@ CRGBPalette16 targetPalette(Black_gp);
 //////////////////////////////
 // defines for sound types
 #define SNDNONE 0
-#define SND1PROP 1
-#define SND2PROPS 2
-#define SNDSOLVED 3
+#define SNDPROP1 1
+#define SNDPROP2 2
+#define SNDPROP12 3
+#define SNDSOLVED 4
 // sound pins. These just set digital pins to high/low for a certain short period to trigger soundboard
 const byte snd1Pin = 2;
 const byte snd2Pin = 3;
 const byte sndSolvedPin = 4;
+const byte snd12Pin = 12;
 const int soundTriggerPeriod = 100; // ms
+const int soundDelay = 3000; // ms
 bool triggeredSound = false; // to make sure sounds are not triggered continuously
 
 //////////////////////////////
 // Relay variables
 //////////////////////////////
-#define RELAYACTIVATE HIGH  // Fred, change this if needed
-#define RELAYDEACTIVATE LOW // Fred, change this if needed
+#define RELAYACTIVATE HIGH
+#define RELAYDEACTIVATE LOW
 #define RELAY1 0
 #define RELAY2 1
 const byte relayPins[2] = { 10, 11 }; // pins used for the relays
+const int relayDelay = 9000; // ms - approx delay needed to sync with next puzzle
 
 //////////////////////////////
 // Magnetic Switch variables
@@ -89,17 +93,19 @@ byte LastPinStatus[numProps][numMagSwitchPins] = { {HIGH, HIGH}, {HIGH, HIGH}, {
 //  State1: Play short sound1 once, run pulsating LEDs algorithm with color of power source 1
 //   Action: break at least one of the power source1 switches (eg by moving src1 out a bit) => State0
 //   Action: power source 2 placed correctly (all switches triggered) => State3
-//  State2: Play short sound1 once, run pulsating LEDs algorithm with color of power source 2
+//  State2: Play short sound2 once, run pulsating LEDs algorithm with color of power source 2
 //   Action: break at least one of the power source2 switches (eg by moving src2 out a bit) => State0
 //   Action: power source 1 placed correctly (all switches triggered) => State3
-//  State3: Play short sound2 once, run pulsating LEDs algorithm with combined color1&color2
-//   Action: break at least one of the power source1 switches (eg by moving src1 out a bit) => State2
-//   Action: break at least one of the power source2 switches (eg by moving src2 out a bit) => State1
+//  State3: Play short sound3 once, run pulsating LEDs algorithm with combined color1&color2
+//   Action: [DISABLED] break at least one of the power source1 switches (eg by moving src1 out a bit) => State2
+//   Action: [DISABLED] break at least one of the power source2 switches (eg by moving src2 out a bit) => State1
 //   Action: fuse placed correctly => State4
-//  State4 (end): Play sound3 continuously, run rotating LEDs algorithm, deactivate electromagnet
+//  State4 (end): Play sound4 once, run rotating LEDs algorithm, deactivate electromagnet
 byte state = 0; // start state
 
+// Timing variables
 bool onetime = true; // to prevent lots of debug output
+unsigned long timerStart;
 
 void setup() {
   // Start a serial connection
@@ -112,7 +118,7 @@ void setup() {
   // When puzzle changes state, relays are being deactivated
   for (int i=0; i<2; i++) {
     pinMode(relayPins[i], OUTPUT);
-    digitalWrite(relayPins[i], RELAYACTIVATE);
+    digitalWrite(relayPins[i], RELAYDEACTIVATE);
   }
 
   // Init audio device
@@ -121,6 +127,8 @@ void setup() {
   digitalWrite(snd1Pin, HIGH);
   pinMode(snd2Pin, OUTPUT);
   digitalWrite(snd2Pin, HIGH);
+  pinMode(snd12Pin, OUTPUT);
+  digitalWrite(snd12Pin, HIGH);
   pinMode(sndSolvedPin, OUTPUT);
   digitalWrite(sndSolvedPin, HIGH);
   
@@ -230,11 +238,14 @@ void ResetFastLEDs() {
 void triggerSound(int soundType) {
   byte soundPin;
   switch(soundType) {
-    case SND1PROP:
+    case SNDPROP1:
       soundPin = snd1Pin;
       break;
-    case SND2PROPS:
+    case SNDPROP2:
       soundPin = snd2Pin;
+      break;
+    case SNDPROP12:
+      soundPin = snd12Pin;
       break;
     case SNDSOLVED:
       soundPin = sndSolvedPin;
@@ -242,6 +253,7 @@ void triggerSound(int soundType) {
     default: // SNDNONE: set all pins high (sound stops as soon as it has played)
       digitalWrite(snd1Pin, HIGH);
       digitalWrite(snd2Pin, HIGH);
+      digitalWrite(snd12Pin, HIGH);
       digitalWrite(sndSolvedPin, HIGH);
       return;
   }
@@ -259,17 +271,17 @@ void setRelay(byte relayID, int relayState) {
   digitalWrite(relayPins[relayID], relayState);
 }
 
-void activateRelays() {
-  // Activate all relays
-  setRelay(RELAY1, RELAYACTIVATE);
-  setRelay(RELAY2, RELAYACTIVATE);
+void setRelays(int relayState) {
+  // set all relays
+  setRelay(RELAY1, relayState);
+  setRelay(RELAY2, relayState);
 }
 
 void loop() {
   switch (state) {
     case 0:
       triggerSound(SNDNONE); // RESET SOUND (just to make sure)
-      activateRelays(); // ACTIVATE the relays
+      setRelays(RELAYDEACTIVATE); // relays back to init state
       ResetFastLEDs(); // Reset LED strip in state0
 
       if (isPropActivated(PROP_P1_IDX)) {
@@ -281,8 +293,8 @@ void loop() {
       }
       break;
     case 1:
-      triggerSound(SND1PROP); // PLAY SHORT SOUND 1
-      activateRelays(); // ACTIVATE the relays
+      triggerSound(SNDPROP1); // PLAY SHORT SOUND PROP1
+      setRelays(RELAYDEACTIVATE); // relays back to init state
 
       // PLAY PULSATING LEDs in color Power Source 1
       targetPalette = Blue_gp;
@@ -290,6 +302,8 @@ void loop() {
       if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
         state = 3;
         triggeredSound = false;
+        triggerSound(SNDPROP2); // PLAY SHORT SOUND PROP2
+        timerStart = millis();
         Serial.println("P1 AND P2 ACTIVATED. State 1 -> State 3");
       } else if (!isPropActivated(PROP_P1_IDX)) {
         state = 0;
@@ -299,8 +313,8 @@ void loop() {
       }
       break;
     case 2:
-      triggerSound(SND1PROP); // PLAY SHORT SOUND 1
-      activateRelays(); // ACTIVATE the relays
+      triggerSound(SNDPROP2); // PLAY SHORT SOUND PROP2
+      setRelays(RELAYDEACTIVATE); // relays back to init state
 
       // PLAY PULSATING LEDs in color Power Source 2
       targetPalette = Yellow_gp;
@@ -308,6 +322,8 @@ void loop() {
       if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
         state = 3;
         triggeredSound = false;
+        triggerSound(SNDPROP1); // PLAY SHORT SOUND PROP1
+        timerStart = millis();
         Serial.println("P1 AND P2 ACTIVATED. State 2 -> State 3");
       } else if (!isPropActivated(PROP_P2_IDX)) {
         state = 0;
@@ -317,29 +333,38 @@ void loop() {
       }
       break;
     case 3:
-      triggerSound(SND2PROPS); // PLAY SHORT SOUND 2
-      setRelay(RELAY1, RELAYDEACTIVATE); // DEACTIVATE relay1
+      // delay sound till sound from state 1 or 2 are finished (approximated by soundDelay variable)
+      if (millis() - timerStart > soundDelay) triggerSound(SNDPROP12); // PLAY SHORT SOUND BOTH PROPS INSERTED
+      setRelay(RELAY2, RELAYACTIVATE); // ACTIVATE relay2
 
       // PLAY PULSATING LEDs in combined color Power Sources 1+2
       targetPalette = Green_gp;
       RunPulsatingFastLEDs();
-      if (!isPropActivated(PROP_P1_IDX)) {
-        state = 2;
-        triggeredSound = false;
-        Serial.println("P1 DEACTIVATED, P2 still ACTIVE. State 3 -> State 2");
-      } else if (!isPropActivated(PROP_P2_IDX)) {
-        state = 1;
-        triggeredSound = false;
-        Serial.println("P2 DEACTIVATED, P1 still ACTIVE. State 3 -> State 1");
-      } else if (isPropActivated(PROP_FUSE_IDX)) {
+// RVG & Fred 11NOV22: decided to not go back to states 0,1,2 once 2 power cells are inserted
+//      if (!isPropActivated(PROP_P1_IDX)) {
+//        state = 2;
+//        triggeredSound = false;
+//        Serial.println("P1 DEACTIVATED, P2 still ACTIVE. State 3 -> State 2");
+//      } else if (!isPropActivated(PROP_P2_IDX)) {
+//        state = 1;
+//        triggeredSound = false;
+//        Serial.println("P2 DEACTIVATED, P1 still ACTIVE. State 3 -> State 1");
+//      } else if (isPropActivated(PROP_FUSE_IDX)) {
+//        state = 4;
+//        triggeredSound = false;
+//        Serial.println("FUSE ACTIVATED. State 3 -> State 4");
+//      }
+      if (isPropActivated(PROP_FUSE_IDX)) {
         state = 4;
         triggeredSound = false;
+        timerStart = millis();
         Serial.println("FUSE ACTIVATED. State 3 -> State 4");
       }
       break;
     case 4:
-      triggerSound(SNDSOLVED); // PLAY SOUND 3
-      setRelay(RELAY2, RELAYDEACTIVATE); // DEACTIVATE relay2
+      triggerSound(SNDSOLVED); // PLAY SOUND ALL PROPS INSERTED
+      // delay relay activation till enough time has passed to be in sync with next puzzle
+      if (millis() - timerStart > relayDelay) setRelay(RELAY1, RELAYACTIVATE); // ACTIVATE relay1
 
       // PLAY ROTATING LEDs
       RunRotatingFastLEDS();
