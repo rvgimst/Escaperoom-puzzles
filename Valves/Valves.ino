@@ -12,6 +12,9 @@
  * 
  * Updated 20190915 : Changed pin numbers from 3/4/5 to 10/9/8 to reflect wiring used in video
  */
+/**
+ * RVG 12NOV22 added code for addressing LED Matrix using the NEO Matrix library
+ */
 
 // INCLUDES
 // Library for controlling LED strips, available from https://github.com/FastLED/FastLED
@@ -62,49 +65,62 @@ uint8_t noise[numPots][numLEDsInEachStrip];
 // Track state of overall puzzle
 enum PuzzleState {Initialising, Running, Solved};
 PuzzleState puzzleState = Initialising;
+// timer variables for audio LOW signal.
+// This eliminates using blocking delay() function
+unsigned long soundTimerStart;
+bool soundTimerArmed = false;
 
-/**
- * Returns true if the puzzle has been solved, false otherwise
- */
-bool checkIfPuzzleSolved(){
-  for(int i=0; i<numPots; i++) {
-    if(currentReadings[i] != solution[i]) {
-      return false;
-    }
-  }
-  return true;
-}
+/////////////////////////////////
+// NEO Matrix includes & defines
+/////////////////////////////////
+#include <Adafruit_GFX.h>
+#include <Adafruit_NeoMatrix.h>
+#include <Adafruit_NeoPixel.h>
+#ifndef PSTR
+ #define PSTR // Make Arduino Due happy
+#endif
 
-/**
- * Called when the puzzle is solved
- */
-void onSolve() {
-  #ifdef DEBUG
-    Serial.println("Puzzle has just been solved!");
-  #endif
-  
-  // Play sound indicating puzzle is solved
-  delay(1000);
-  // Trigger the Relay
-  digitalWrite(relayPin, HIGH);
-  triggerSound(SNDSOLVED, 0);
-  
-  puzzleState = Solved;
-}
+#define MATRIX_PIN A3
+// MATRIX DECLARATION:
+// Parameter 1 = width of NeoPixel matrix
+// Parameter 2 = height of matrix
+// Parameter 3 = pin number (most are valid)
+// Parameter 4 = matrix layout flags, add together as needed:
+//   NEO_MATRIX_TOP, NEO_MATRIX_BOTTOM, NEO_MATRIX_LEFT, NEO_MATRIX_RIGHT:
+//     Position of the FIRST LED in the matrix; pick two, e.g.
+//     NEO_MATRIX_TOP + NEO_MATRIX_LEFT for the top-left corner.
+//   NEO_MATRIX_ROWS, NEO_MATRIX_COLUMNS: LEDs are arranged in horizontal
+//     rows or in vertical columns, respectively; pick one or the other.
+//   NEO_MATRIX_PROGRESSIVE, NEO_MATRIX_ZIGZAG: all rows/columns proceed
+//     in the same order, or alternate lines reverse direction; pick one.
+//   See example below for these values in action.
+// Parameter 5 = pixel type flags, add together as needed:
+//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
+//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
+//   NEO_GRBW    Pixels are wired for GRBW bitstream (RGB+W NeoPixel products)
+//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
+Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(32, 8, MATRIX_PIN,
+  NEO_MATRIX_TOP     + NEO_MATRIX_LEFT +
+  NEO_MATRIX_COLUMNS + NEO_MATRIX_ZIGZAG,
+  NEO_GRB            + NEO_KHZ800);
 
-/**
- * Called when the puzzle (which previously had been solved) becomes unsolved
- */
-void onUnsolve() {
-  #ifdef DEBUG
-    Serial.println("Puzzle has just become unsolved!");
-  #endif
+///////////////////////
+// NEOMatrix variables
+///////////////////////
+// red, green blue
+const uint16_t matrixColors[] = {
+  matrix.Color(255, 0, 0),
+  matrix.Color(0, 255, 0),
+  matrix.Color(0, 0, 255)
+};
 
-  // Shut off the relay
-  digitalWrite(relayPin, LOW);
-  
-  puzzleState = Running;
-}
+int matrixPosCnt = matrix.width();
+char matrixUnsolvedText[] = "Computer systems offline";
+char matrixSolvedText[] = "Computer systems online";
+char matrixOutStr[40]; // space for 40-char text
+byte matrixColIdx = 0;
+int matrixCharWidth = 6; // width of font in pixels
 
 /**
  * Initialisation
@@ -145,10 +161,76 @@ void setup(){
   //noiseOffset[1] = random16();
   //noiseOffset[2] = random16();
 
+  // NEO Matrix setup
+  strcpy(matrixOutStr, matrixUnsolvedText);
+  matrixColIdx = 0;
+  matrix.begin();
+  matrix.setTextWrap(false);
+  matrix.setBrightness(40);
+  matrix.setTextColor(matrixColors[matrixColIdx]);
+
   // Set the puzzle into the running state
   puzzleState = Running;
 }
 
+/**
+ * Returns true if the puzzle has been solved, false otherwise
+ */
+unsigned long mainTimer = millis();
+bool checkIfPuzzleSolved(){
+//  // TEST TEST TEST
+//  if (millis() - mainTimer > 10000) { // simulate solve after 10s
+//    return true;
+//  }
+//  // /TEST
+  
+  for(int i=0; i<numPots; i++) {
+    if(currentReadings[i] != solution[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Called when the puzzle is solved
+ */
+void onSolve() {
+  #ifdef DEBUG
+    Serial.println("Puzzle has just been solved!");
+  #endif
+  
+  // TODO: Play sound indicating puzzle is solved
+  
+  delay(100); // was 1000, don't know why
+  // Trigger the Relay
+  digitalWrite(relayPin, HIGH);
+  triggerSound(SNDSOLVED, 0);
+
+  // set text on matrix to the solved text & color
+  matrixColIdx = 1;
+  strcpy(matrixOutStr, matrixSolvedText);
+  
+  puzzleState = Solved;
+}
+
+/**
+ * Called when the puzzle (which previously had been solved) becomes unsolved
+ */
+void onUnsolve() {
+  #ifdef DEBUG
+    Serial.println("Puzzle has just become unsolved!");
+  #endif
+
+  // Shut off the relay
+  digitalWrite(relayPin, LOW);
+
+  // set text on matrix to the unsolved text & color
+  matrixColIdx = 0;
+  strcpy(matrixOutStr, matrixUnsolvedText);
+  
+  puzzleState = Running;
+}
 
 // Create an array of "noise" - one value for each LED
 void fillnoise8(uint16_t speed, uint16_t scale) {
@@ -182,9 +264,25 @@ void triggerSound(int soundType, int value) {
       return; // no sound
   }
   digitalWrite(soundPin, LOW);
-  if (soundType != SNDSOLVED) { // keep signal low (loop sound) when SOLVED
-    delay(soundTriggerPeriod);
-    digitalWrite(soundPin, HIGH);
+  soundTimerStart = millis();
+  soundTimerArmed = true;
+}
+
+/*
+ * This function uses a timer to determine if the soundpins should be set back to high
+ * in order for sounds to be played only once.
+ * It uses the state of the puzzle, because the solved sound should play continuously
+ */
+void checkSoundOutputs() {
+  if (soundTimerArmed && (millis() - soundTimerStart) > soundTriggerPeriod) {
+    Serial.println("checkSoundOutputs: resetting UP/DOWN audio pins HIGH");
+    digitalWrite(sndUpPin, HIGH);
+    digitalWrite(sndDownPin, HIGH);
+    if (puzzleState != Solved) { // set SolvedPin to HIGH if not solved
+      Serial.println("                   resetting SOLVED audio pin HIGH");
+      digitalWrite(sndSolvedPin, HIGH);
+    }
+    soundTimerArmed = false;
   }
 }
 
@@ -235,11 +333,12 @@ void getInput() {
     
     // Print some debug information
     #ifdef DEBUG
+    EVERY_N_MILLISECONDS(50) {
       Serial.print(" raw:");
       Serial.print(rawValue);
       Serial.print(", scaled:");
       Serial.println(scaledValue);
-      delay(50);
+    }
     #endif
   }
 }
@@ -290,11 +389,39 @@ void setDisplay(int style = 0) {
   FastLED.show();
 }
 
+void updateMatrix() {
+  EVERY_N_MILLISECONDS(40) {
+#ifdef DEBUG
+    Serial.print("text: ");
+    Serial.print(matrixOutStr);
+    Serial.print("  colidx: ");
+    Serial.print(matrixColIdx);
+    Serial.print("  len: ");
+    Serial.print(strlen(matrixOutStr));
+    Serial.print("  width: ");
+    Serial.print(matrixCharWidth);
+    Serial.print("  <calc>: ");
+    Serial.print((strlen(matrixOutStr) + 1)*matrixCharWidth);   
+    Serial.print("  poscnt: ");
+    Serial.println(matrixPosCnt);    
+#endif
+
+    matrix.fillScreen(0);
+    matrix.setCursor(matrixPosCnt, 0);
+    matrix.print(matrixOutStr);
+    int len = strlen(matrixOutStr);
+    if (--matrixPosCnt < -(len + 1)*matrixCharWidth) {
+      matrixPosCnt = matrix.width();
+    }
+    matrix.setTextColor(matrixColors[matrixColIdx]);
+    matrix.show();
+  }
+}
+
 /**
  * Main program loop runs indefinitely
  */
 void loop(){
-
   // Switch action based on the current state of the puzzle
   switch(puzzleState) {
     case Initialising:
@@ -321,4 +448,10 @@ void loop(){
       
       break;
   }
+
+  // NEO Matrix loop code
+  updateMatrix();
+
+  // check sound pin output states
+  checkSoundOutputs();
 }
