@@ -52,6 +52,7 @@ const byte relayPin = 7;
 // Specific colors for the different strips
 const uint8_t stripHue[numPots] = {HUE_ORANGE, HUE_RED, HUE_GREEN};
 // NOTE: the pins to which the LED strips are connected is hardcoded in setup, not here.
+const int keyCorrectTimeout = 1000; // ms
 
 // GLOBALS
 // This array will record the current reading of each input valve
@@ -63,12 +64,14 @@ static uint16_t noiseOffset[3];
 // This is the array that we keep our computed noise values in
 uint8_t noise[numPots][numLEDsInEachStrip];
 // Track state of overall puzzle
-enum PuzzleState {Initialising, Running, Solved};
+enum PuzzleState {Initialising, Running, KeyCorrect, Solved};
 PuzzleState puzzleState = Initialising;
-// timer variables for audio LOW signal.
-// This eliminates using blocking delay() function
+// timer variables 
+// Timer for audio LOW signal. This eliminates using blocking delay() function
 unsigned long soundTimerStart;
 bool soundTimerArmed = false;
+// Timer for period between key correct and puzzle solved
+unsigned long solvedTimerStart;
 
 /////////////////////////////////
 // NEO Matrix includes & defines
@@ -174,12 +177,12 @@ void setup(){
 }
 
 /**
- * Returns true if the puzzle has been solved, false otherwise
+ * Returns true if the input key is correct, false otherwise
  */
 unsigned long mainTimer = millis();
-bool checkIfPuzzleSolved(){
+bool checkIfKeyCorrect(){
 //  // TEST TEST TEST
-//  if (millis() - mainTimer > 10000) { // simulate solve after 10s
+//  if (millis() - mainTimer > 10000) { // simulate correct key after 10s
 //    return true;
 //  }
 //  // /TEST
@@ -431,8 +434,26 @@ void loop(){
     case Running:
       getInput();
       setDisplay(1);
-      if(checkIfPuzzleSolved()){ 
-        onSolve();
+      if (checkIfKeyCorrect()){
+        Serial.println("Key is correct. Waiting...");
+        solvedTimerStart = millis();
+        puzzleState = KeyCorrect;
+      }
+      break;
+
+    case KeyCorrect:
+      // in this state the Key is constantly checked. 
+      // If key is correct during a certain time period, the state transfers to solved.
+      // This state prevents the puzzle being solved by accident
+      getInput();
+      setDisplay(1);
+      if (checkIfKeyCorrect()){ 
+        if (millis() - solvedTimerStart > keyCorrectTimeout) { // key stayed correct during timeout
+          Serial.println("Key timeout successful. Transitioning to Solved state.");
+          onSolve();
+        }
+      } else {
+        puzzleState = Running; // back to normal state if key was changed during Timeout
       }
       break;
       
