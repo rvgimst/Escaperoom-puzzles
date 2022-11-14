@@ -164,8 +164,8 @@ void setup() {
   
   // FOR TESTING ONLY! TEMP
   // Trigger the Relay
-  delay(3000);
-  digitalWrite(RELAY_PIN, HIGH);
+//  delay(3000);
+//  digitalWrite(RELAY_PIN, HIGH);
 
   // Init audio. Setup the sound pins
   pinMode(sndSpawnPin, OUTPUT);
