@@ -50,7 +50,7 @@ const byte snd2Pin = 3;
 const byte sndSolvedPin = 4;
 const byte snd12Pin = 12;
 const int soundTriggerPeriod = 100; // ms
-const int soundDelay = 3000; // ms
+const int soundDelay = 4500; // ms
 bool triggeredSound = false; // to make sure sounds are not triggered continuously
 
 //////////////////////////////
@@ -259,6 +259,7 @@ void triggerSound(int soundType) {
   }
 
   if (!triggeredSound) {
+    Serial.println((String)"triggering sound on pin " + soundPin);
     digitalWrite(soundPin, LOW);
     triggeredSound = true;
     delay(soundTriggerPeriod);
@@ -304,6 +305,7 @@ void loop() {
         triggeredSound = false;
         triggerSound(SNDPROP2); // PLAY SHORT SOUND PROP2
         timerStart = millis();
+        triggeredSound = false; // for the second sound to be played
         Serial.println("P1 AND P2 ACTIVATED. State 1 -> State 3");
       } else if (!isPropActivated(PROP_P1_IDX)) {
         state = 0;
@@ -324,6 +326,7 @@ void loop() {
         triggeredSound = false;
         triggerSound(SNDPROP1); // PLAY SHORT SOUND PROP1
         timerStart = millis();
+        triggeredSound = false; // for the second sound to be played
         Serial.println("P1 AND P2 ACTIVATED. State 2 -> State 3");
       } else if (!isPropActivated(PROP_P2_IDX)) {
         state = 0;
@@ -334,7 +337,9 @@ void loop() {
       break;
     case 3:
       // delay sound till sound from state 1 or 2 are finished (approximated by soundDelay variable)
-      if (millis() - timerStart > soundDelay) triggerSound(SNDPROP12); // PLAY SHORT SOUND BOTH PROPS INSERTED
+      if (millis() - timerStart > soundDelay) {
+        triggerSound(SNDPROP12); // PLAY SHORT SOUND BOTH PROPS INSERTED
+      }
       setRelay(RELAY2, RELAYACTIVATE); // ACTIVATE relay2
 
       // PLAY PULSATING LEDs in combined color Power Sources 1+2
@@ -364,7 +369,10 @@ void loop() {
     case 4:
       triggerSound(SNDSOLVED); // PLAY SOUND ALL PROPS INSERTED
       // delay relay activation till enough time has passed to be in sync with next puzzle
-      if (millis() - timerStart > relayDelay) setRelay(RELAY1, RELAYACTIVATE); // ACTIVATE relay1
+      if (millis() - timerStart > relayDelay) {
+        setRelay(RELAY1, RELAYACTIVATE); // ACTIVATE relay1
+        setRelay(RELAY2, RELAYDEACTIVATE); // DEACTIVATE relay2 (not needed enymore after solving puzzle
+      }
 
       // PLAY ROTATING LEDs
       RunRotatingFastLEDS();
