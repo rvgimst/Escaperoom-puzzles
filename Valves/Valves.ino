@@ -430,33 +430,17 @@ void loop(){
     case Initialising:
       puzzleState = Running;
       break;
-      
     case Running:
       getInput();
       setDisplay(1);
-      if (checkIfKeyCorrect()){
+      if (checkIfKeyCorrect()) {
         Serial.println("Key is correct. Waiting...");
         solvedTimerStart = millis();
+        //onSolve();
         puzzleState = KeyCorrect;
       }
       break;
 
-    case KeyCorrect:
-      // in this state the Key is constantly checked. 
-      // If key is correct during a certain time period, the state transfers to solved.
-      // This state prevents the puzzle being solved by accident
-      getInput();
-      setDisplay(1);
-      if (checkIfKeyCorrect()){ 
-        if (millis() - solvedTimerStart > keyCorrectTimeout) { // key stayed correct during timeout
-          Serial.println("Key timeout successful. Transitioning to Solved state.");
-          onSolve();
-        }
-      } else {
-        puzzleState = Running; // back to normal state if key was changed during Timeout
-      }
-      break;
-      
     case Solved:
       setDisplay(0);
       #ifdef ALLOW_UNSOLVE
@@ -465,9 +449,24 @@ void loop(){
         if (!checkIfPuzzleSolved()){
           onUnsolve();
         }
-      #endif
-      
+      #endif 
       break;
+
+    case KeyCorrect:
+      // in this state the Key is constantly checked. 
+      // If key is correct during a certain time period, the state transfers to solved.
+      // This state prevents the puzzle being solved by accident
+      getInput();
+      setDisplay(1);
+      if (checkIfKeyCorrect()) { 
+        if (millis() - solvedTimerStart > keyCorrectTimeout) { // key stayed correct during timeout
+          //Serial.println("Key timeout successful. Transitioning to Solved state.");
+          onSolve();
+        }
+      } else {
+        puzzleState = Running; // back to normal state if key was changed during Timeout
+      }
+      break; 
   }
 
   // NEO Matrix loop code
