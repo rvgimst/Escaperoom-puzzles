@@ -119,9 +119,9 @@ const uint16_t matrixColors[] = {
 };
 
 int matrixPosCnt = matrix.width();
-char matrixUnsolvedText[] = "Computer systems offline";
-char matrixSolvedText[] = "Computer systems online";
-char matrixOutStr[40]; // space for 40-char text
+char matrixUnsolvedText[] = "Computers offline";
+char matrixSolvedText[] = "Computers online [NESW]";
+char matrixOutStr[50]; // space for 50-char text
 byte matrixColIdx = 0;
 int matrixCharWidth = 6; // width of font in pixels
 
@@ -393,7 +393,7 @@ void setDisplay(int style = 0) {
 }
 
 void updateMatrix() {
-  EVERY_N_MILLISECONDS(40) {
+  EVERY_N_MILLISECONDS(40) { // 100 for slow movement (debug)
 #ifdef DEBUG
     Serial.print("text: ");
     Serial.print(matrixOutStr);
