@@ -125,13 +125,27 @@ char matrixOutStr[50]; // space for 50-char text
 byte matrixColIdx = 0;
 int matrixCharWidth = 6; // width of font in pixels
 
+// We need the arrow symbols from the ASCI table that is used by the Adafruit NeoMatrix library,
+// actually the adafruit GFX library contains the functions for drawing texts
+// ASCII codes used from https://learn.adafruit.com/adafruit-gfx-graphics-library/graphics-primitives
+// arrow up   (^): 24 (0x18)
+// arrow down (v): 25 (0x19)
+// arrow right(>): 26 (0x1A)
+// arrow left (<): 27 (0x1B)
+// The array below contains the sequence of 4 arrows (access code) that you want displayed (eg <^^v)
+int arrowCode[4] = { 0x1B, 0x18, 0x18, 0x19 };
+// The next array indicates the positions in the SolvedText that contain the placeholders
+// (1st character in string has index 0!)
+int arrowPlaceholder[4] = { 18, 19, 20, 21 };
+
 /**
  * Initialisation
  */
 void setup(){
   Serial.begin(9600);
   Serial.println(__FILE__ " Created:" __DATE__ " " __TIME__);
-  
+
+  delay(500);
   randomSeed(analogRead(7)); 
   
   // Set the linear pot pins as input
@@ -165,6 +179,12 @@ void setup(){
   //noiseOffset[2] = random16();
 
   // NEO Matrix setup
+  // this is a bit of a hack
+  // several arrow symbols from the ASCII table are written
+  // over the placeholders in the SolvedText array 
+  for (int i=0; i<4; i++) {
+    matrixSolvedText[arrowPlaceholder[i]] = (char)arrowCode[i];
+  }
   strcpy(matrixOutStr, matrixUnsolvedText);
   matrixColIdx = 0;
   matrix.begin();
@@ -182,9 +202,14 @@ void setup(){
 unsigned long mainTimer = millis();
 bool checkIfKeyCorrect(){
 //  // TEST TEST TEST
+//  #define ALLOW_UNSOLVE
+//  static bool correct = false;
+//  
 //  if (millis() - mainTimer > 10000) { // simulate correct key after 10s
-//    return true;
+//    correct = !correct;
+//    mainTimer = millis();
 //  }
+//  return correct;
 //  // /TEST
   
   for(int i=0; i<numPots; i++) {
