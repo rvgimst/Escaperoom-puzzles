@@ -22,7 +22,9 @@
 
 // DEFINES
 // Flag to toggle debugging output
-// #define DEBUG
+#define DEBUG
+// DEBUG_LEVELs: 1-minimal, 2-reasonable, 3-lots
+#define DEBUG_LEVEL 1
 // #define ALLOW_UNSOLVE
 
 #define SNDUP 0
@@ -119,8 +121,8 @@ const uint16_t matrixColors[] = {
 };
 
 int matrixPosCnt = matrix.width();
-char matrixUnsolvedText[] = "Computers offline";
-char matrixSolvedText[] = "Computers online [NESW]";
+char matrixUnsolvedText[] = "Computer systems offline";
+char matrixSolvedText[] = "Computer systems online [UUDU]"; // use placeholders UDLR for arrow symbols, see below
 char matrixOutStr[50]; // space for 50-char text
 byte matrixColIdx = 0;
 int matrixCharWidth = 6; // width of font in pixels
@@ -128,15 +130,16 @@ int matrixCharWidth = 6; // width of font in pixels
 // We need the arrow symbols from the ASCI table that is used by the Adafruit NeoMatrix library,
 // actually the adafruit GFX library contains the functions for drawing texts
 // ASCII codes used from https://learn.adafruit.com/adafruit-gfx-graphics-library/graphics-primitives
-// arrow up   (^): 24 (0x18)
-// arrow down (v): 25 (0x19)
-// arrow right(>): 26 (0x1A)
-// arrow left (<): 27 (0x1B)
-// The array below contains the sequence of 4 arrows (access code) that you want displayed (eg <^^v)
-int arrowCode[4] = { 0x1B, 0x18, 0x18, 0x19 };
+// arrow up   (U): 24 (0x18)
+// arrow down (D): 25 (0x19)
+// arrow right(R): 26 (0x1A)
+// arrow left (L): 27 (0x1B)
+// The array below contains the arrows that will be used to substitute the placeholders in the SolvedText
+int arrowCode[4] = { 0x18, 0x19, 0x1A, 0x1B };
 // The next array indicates the positions in the SolvedText that contain the placeholders
-// (1st character in string has index 0!)
-int arrowPlaceholder[4] = { 18, 19, 20, 21 };
+// If you change the SolvedText, check the arrow placeholder indices
+// (1st character in the SolvedText string has index 0!)
+int arrowPlaceholder[4] = { 25, 26, 27, 28 };
 
 /**
  * Initialisation
@@ -179,12 +182,7 @@ void setup(){
   //noiseOffset[2] = random16();
 
   // NEO Matrix setup
-  // this is a bit of a hack
-  // several arrow symbols from the ASCII table are written
-  // over the placeholders in the SolvedText array 
-  for (int i=0; i<4; i++) {
-    matrixSolvedText[arrowPlaceholder[i]] = (char)arrowCode[i];
-  }
+  replaceSolvedTextSymbols();
   strcpy(matrixOutStr, matrixUnsolvedText);
   matrixColIdx = 0;
   matrix.begin();
@@ -196,13 +194,41 @@ void setup(){
   puzzleState = Running;
 }
 
+void replaceSolvedTextSymbols() {
+  int arrowIdx = 0;
+
+  // The placeholders "UDLR" used in the SolvedText array are overwritten
+  // by the correct ASCII codes
+  for (int i=0; i<4; i++) {
+    switch (matrixSolvedText[arrowPlaceholder[i]]) {
+      case 'U': 
+        arrowIdx = 0;
+        break;
+      case 'D': 
+        arrowIdx = 1;
+        break;
+      case 'R': 
+        arrowIdx = 2;
+        break;
+      case 'L': 
+        arrowIdx = 3;
+        break;
+      default:
+        break;
+    }
+#if defined(DEBUG) && DEBUG_LEVEL > 1
+    Serial.println((String)"placeholder:"+arrowPlaceholder[i]+" arrow:"+arrowCode[arrowIdx]);
+#endif
+    matrixSolvedText[arrowPlaceholder[i]] = (char)arrowCode[arrowIdx];
+  }
+}
+
 /**
  * Returns true if the input key is correct, false otherwise
  */
 unsigned long mainTimer = millis();
 bool checkIfKeyCorrect(){
 //  // TEST TEST TEST
-//  #define ALLOW_UNSOLVE
 //  static bool correct = false;
 //  
 //  if (millis() - mainTimer > 10000) { // simulate correct key after 10s
@@ -224,13 +250,10 @@ bool checkIfKeyCorrect(){
  * Called when the puzzle is solved
  */
 void onSolve() {
-  #ifdef DEBUG
+  #if defined(DEBUG) && (DEBUG_LEVEL > 0)
     Serial.println("Puzzle has just been solved!");
   #endif
   
-  // TODO: Play sound indicating puzzle is solved
-  
-  delay(100); // was 1000, don't know why
   // Trigger the Relay
   digitalWrite(relayPin, HIGH);
   triggerSound(SNDSOLVED, 0);
@@ -246,7 +269,7 @@ void onSolve() {
  * Called when the puzzle (which previously had been solved) becomes unsolved
  */
 void onUnsolve() {
-  #ifdef DEBUG
+  #if defined(DEBUG) && (DEBUG_LEVEL > 0)
     Serial.println("Puzzle has just become unsolved!");
   #endif
 
@@ -303,11 +326,15 @@ void triggerSound(int soundType, int value) {
  */
 void checkSoundOutputs() {
   if (soundTimerArmed && (millis() - soundTimerStart) > soundTriggerPeriod) {
-    Serial.println("checkSoundOutputs: resetting UP/DOWN audio pins HIGH");
+    #if defined(DEBUG) && (DEBUG_LEVEL > 2)
+      Serial.println("checkSoundOutputs: resetting UP/DOWN audio pins HIGH");
+    #endif
     digitalWrite(sndUpPin, HIGH);
     digitalWrite(sndDownPin, HIGH);
     if (puzzleState != Solved) { // set SolvedPin to HIGH if not solved
-      Serial.println("                   resetting SOLVED audio pin HIGH");
+      #if defined(DEBUG) && (DEBUG_LEVEL > 2)
+        Serial.println(" resetting SOLVED audio pin HIGH");
+      #endif
       digitalWrite(sndSolvedPin, HIGH);
     }
     soundTimerArmed = false;
@@ -321,7 +348,7 @@ void getInput() {
   int scaledValue;
   // Read the value from the pots
   for(int i=0; i<numPots; i++){
-    #ifdef DEBUG
+    #if defined(DEBUG) && DEBUG_LEVEL > 2
       Serial.print("Valve ");
       Serial.print(i);
     #endif
@@ -360,7 +387,7 @@ void getInput() {
     currentReadings[i] = scaledValue;
     
     // Print some debug information
-    #ifdef DEBUG
+    #if defined(DEBUG) && DEBUG_LEVEL > 2
     EVERY_N_MILLISECONDS(50) {
       Serial.print(" raw:");
       Serial.print(rawValue);
@@ -419,7 +446,7 @@ void setDisplay(int style = 0) {
 
 void updateMatrix() {
   EVERY_N_MILLISECONDS(40) { // 100 for slow movement (debug)
-#ifdef DEBUG
+#if defined(DEBUG) && DEBUG_LEVEL > 2
     Serial.print("text: ");
     Serial.print(matrixOutStr);
     Serial.print("  colidx: ");
@@ -459,7 +486,9 @@ void loop(){
       getInput();
       setDisplay(1);
       if (checkIfKeyCorrect()) {
+#if defined(DEBUG) && DEBUG_LEVEL > 0
         Serial.println("Key is correct. Waiting...");
+#endif
         solvedTimerStart = millis();
         //onSolve();
         puzzleState = KeyCorrect;
@@ -485,7 +514,9 @@ void loop(){
       setDisplay(1);
       if (checkIfKeyCorrect()) { 
         if (millis() - solvedTimerStart > keyCorrectTimeout) { // key stayed correct during timeout
-          //Serial.println("Key timeout successful. Transitioning to Solved state.");
+#if defined(DEBUG) && (DEBUG_LEVEL > 1)
+          Serial.println("Key timeout successful. Transitioning to Solved state.");
+#endif
           onSolve();
         }
       } else {
