@@ -147,11 +147,6 @@ void setup() {
     }
   }
 
-  // Init LEDs
-//  for (int i=0; i < numProps; i++) {
-//    pinMode(leds[i], OUTPUT);
-//  }
-
   // Init FastLED strip
   FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(fastleds, NUM_FLEDS);
   FastLED.setBrightness(BRIGHTNESS_HI); // set master brightness control
