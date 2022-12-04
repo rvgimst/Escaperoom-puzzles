@@ -22,7 +22,7 @@
 // address as described in the datasheet http://www.ti.com/lit/ds/symlink/ina219.pdf
 const byte numSensors = 2;
 const byte relayPins[2] = {A0, A1};
-int resetPin = 3;
+
 // GLOBALS
 // Declare the array of sensors
 INA219 sensors[numSensors] = {
@@ -31,6 +31,10 @@ INA219 sensors[numSensors] = {
 };
 // An array to record the starting reading of each sensor
 float baseReading[numSensors];
+// RVG: An array that holds reference values in case the readings are too far off
+//      (e.g. someone touching the balls at startup)
+//      these readings we measured running the puzzle multiple times
+const float referenceReading[numSensors] = {1.59, 1.15};
 // Array of running averages to smooth readings
 RunningAverage averageReadings[numSensors] = {
   RunningAverage(5),
@@ -41,11 +45,8 @@ RunningAverage averageReadings[numSensors] = {
 float tolerance = 0.1;
 
 void setup(void) {
-//  pinMode(resetPin, OUTPUT);
-// digitalWrite(resetPin, HIGH);
-// delay(200);
-// digitalWrite(resetPin, LOW);
-  delay(200);
+  float avg;
+  delay(300);
 
   #ifdef DEBUG
     Serial.begin(115200);
@@ -66,14 +67,33 @@ void setup(void) {
       averageReadings[j].addValue(sensors[j].busPower());
       delay(50);
     }    
-    // Assign the running average value to the array
-    baseReading[j] = averageReadings[j].getAverage();
+    avg = averageReadings[j].getAverage();
+
     #ifdef DEBUG
       Serial.print(F("Sensor "));
       Serial.print(j);
-      Serial.print(F(" initialised with base reading "));
-      Serial.println(baseReading[j]);
+      Serial.print(F(" reads "));
+      Serial.println(avg);
     #endif
+    // Assign the running average value to the array
+    // RVG: but only if the readings are more or less within a reasonable value 
+    //     (according to earlier measurements of this puzzle in the escape room)
+    //     This is to prevent that the Arduino starts while someone holds one of the balls,
+    //     resulting in a false reading and never solving the puzzle.
+    if (fabs(avg - referenceReading[j]) > 2*tolerance) { // too far off
+      baseReading[j] = referenceReading[j];
+      #ifdef DEBUG
+        Serial.print(F("Value too far off. BASE initialised with REFERENCE reading "));
+      #endif
+    } else {
+      baseReading[j] = avg;
+      #ifdef DEBUG
+        Serial.print(F("Value OK. BASE initialised with AVERAGE reading "));
+      #endif
+    }
+    #ifdef DEBUG
+      Serial.println(baseReading[j]);
+    #endif    
   }
 
   // Initialise the relay pins 
@@ -94,6 +114,9 @@ bool allBallsBeingTouched() {
   // If all the balls are being touched, then all sensor readings should be outside the
   // tolerance limit from their base (untouched) readings. Put another way, if any sensor
   // reading is *within* the tolerance, then all the balls can't be being touched:
+  // RVG: be aware that it is assumed that the avgReading when touched is always higher!
+  //      If lower the difference is negative and always < tolerance.
+  //      Better use abs() function
   for(int i=0; i<numSensors; i++) {
     if((averageReadings[i].getAverage() - baseReading[i]) < tolerance) {
       return false;
