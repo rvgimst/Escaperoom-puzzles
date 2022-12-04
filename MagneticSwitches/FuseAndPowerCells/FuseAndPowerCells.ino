@@ -21,6 +21,14 @@ DEFINE_GRADIENT_PALETTE( Blue_gp ) {
     0,   0,  0, 255,
   255,   0,  0, 255};
 
+DEFINE_GRADIENT_PALETTE( Red_gp ) {
+    0, 255,  0,   0,
+  255, 255,  0,   0};
+
+DEFINE_GRADIENT_PALETTE( Purple_gp ) {
+    0, 255,  0, 255,
+  255, 255,  0, 255};
+
 DEFINE_GRADIENT_PALETTE( Green_gp ) {
     0,  0, 255, 0,
   255,  0, 255, 0
@@ -319,7 +327,7 @@ void loop() {
       setRelays(RELAYDEACTIVATE); // relays back to init state
 
       // PLAY PULSATING LEDs in color Power Source 2
-      targetPalette = Yellow_gp;
+      targetPalette = Red_gp;
       RunPulsatingFastLEDs();
       if (isPropActivated(PROP_P1_IDX) && isPropActivated(PROP_P2_IDX)) {
         state = 3;
@@ -343,7 +351,7 @@ void loop() {
       setRelay(RELAY2, RELAYACTIVATE); // ACTIVATE relay2
 
       // PLAY PULSATING LEDs in combined color Power Sources 1+2
-      targetPalette = Green_gp;
+      targetPalette = Purple_gp;
       RunPulsatingFastLEDs();
 // RVG & Fred 11NOV22: decided to not go back to states 0,1,2 once 2 power cells are inserted
 //      if (!isPropActivated(PROP_P1_IDX)) {
