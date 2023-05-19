@@ -9,6 +9,14 @@
 // DEFINES
 #define DEBUG
 
+// Audio
+// RVG: triggerSound() is the routine that is playing the sound
+// For now, every time all balls are touched, the sound is played
+// If you want to change this, just call triggerSound() somewhere else in the code
+const int soundPin = 2;
+const int soundTriggerPeriod = 100; // ms
+const bool AudioContinuous = false; // Set this to play continuously or only once
+
 // INCLUDES
 // Arduino library for I2C connection
 #include <Wire.h>
@@ -33,7 +41,7 @@ INA219 sensors[numSensors] = {
 float baseReading[numSensors];
 // RVG: An array that holds reference values in case the readings are too far off
 //      (e.g. someone touching the balls at startup)
-//      these readings we measured running the puzzle multiple times
+//      these readings were measured running the puzzle multiple times
 const float referenceReading[numSensors] = {1.59, 1.15};
 // Array of running averages to smooth readings
 RunningAverage averageReadings[numSensors] = {
@@ -101,13 +109,27 @@ void setup(void) {
     pinMode(relayPins[i], OUTPUT);
     digitalWrite(relayPins[i], LOW);
   }
-  
+
+  // setup audio
+  pinMode(soundPin, OUTPUT);
+  digitalWrite(soundPin, HIGH);
+
   #ifdef DEBUG
     Serial.println(F("Setup complete."));
   #endif
 
   // Pause to let everything stabilise before running the main program loop
   delay(1000);
+}
+
+void triggerSound() {
+  if (AudioContinuous) {
+    digitalWrite(soundPin, LOW);
+  } else {
+    digitalWrite(soundPin, LOW);
+    delay(soundTriggerPeriod);
+    digitalWrite(soundPin, HIGH);
+  }
 }
 
 bool allBallsBeingTouched() {
@@ -122,6 +144,7 @@ bool allBallsBeingTouched() {
       return false;
     }
   }
+  triggerSound();
   return true;
 }
 
