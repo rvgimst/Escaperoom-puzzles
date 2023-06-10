@@ -17,7 +17,8 @@
  *
  * ==== LAYOUT ESCAPE FROM THE PAST, MD, US ====
  * NOTE: directions on junctions (left/right) below correspond to the physical puzzle when watched from the back of the board
- * NOTE2: 5 LEDs indicated with [*] are redundant LEDs that take no part in/are excluded from the puzzle
+ * NOTE2: 5 LEDs indicated with [*] are redundant LEDs that take no part in the puzzle. 
+ *        See the wiring photo to see where Fred made his noteworthy mistakes when glueing the LEDs in ...LOL... :D
  * 
  * Distance Travelled
  *  0   1   2   3    4    5    6    7    8    9    10   11   12   13   14   15   16   17   18   19   20   21   22   23   24   25   26   27   28   29   30   31   32   33   34   35   36   37
@@ -134,6 +135,15 @@ const unsigned int scoreLEDs[numParticleTypes][3] = {
   {82, 81, 80}
 };
 
+// PUZZLE DIFFICULTY parameters
+// Specify whether speed change is allowed
+bool spdChangeAllowed = false;
+// Specify whether penalties on score is allowed
+bool penaltiesAllowed = true;
+// number of SECONDS until we switch to easier mode (=disregard penalties)
+unsigned long _easyModeDelay = 300; // 5 minutes (5*60s)
+unsigned long _puzzleStartTime = 0; // will be set in setup
+
 // GLOBALS
 // How many of the correct-coloured particle are currently sitting at the bottom of each track?
 int score[numParticleTypes] = {0, 0, 0, 0, 0};
@@ -187,7 +197,10 @@ void setup() {
   }
 
   // Set a random seed by reading the input value of an (unconnected) analog pin
-  randomSeed(analogRead(A5));
+  randomSeed(analogRead(A3));
+
+  // set start time of the puzzle
+  _puzzleStartTime = millis();
 }
 
 // This function sets the correct LEDs for a particular particle on the track
@@ -366,12 +379,18 @@ void loop() {
 //    if(i<numSwitchPins-1) { Serial.print(","); }
 //  }
 //  Serial.println("");
- 
+
   // Clear the LEDs
   FastLED.clear();
 
   // Get the current elapsed time
   unsigned long currentTime = millis();
+
+  // Check if it's time for EASY mode
+//  Serial.println((String)currentTime + "," + (_puzzleStartTime + _easyModeDelay*1000));
+  if (currentTime > _puzzleStartTime + _easyModeDelay*1000) {
+    penaltiesAllowed = false; // EASY: score can only increase
+  }
 
   // Has it been too long since the last time we spawned a particle?
   if(currentTime > _lastSpawned + _rate){
@@ -421,9 +440,9 @@ void loop() {
         if(particlePool[i].type == particlePool[i].track && score[particlePool[i].track] < 3) {
           // Increase the score for this track
           score[particlePool[i].track]++;
-          // full score? then speed up next particles and play SOUND SUBACTIVE
+          // full score? then speed up next particles (if allowed) and play SOUND SUBACTIVE
           if (score[particlePool[i].track] == 3) {
-            _particleSpeed++;
+            if (spdChangeAllowed) _particleSpeed++;
             if (calculateTotalScore() < 15) { // only play SUBACTIVE SOUND when puzzle is not solved
               triggerSound(SND_SUBACTIVE);
             }
@@ -431,14 +450,13 @@ void loop() {
         }
         // The particle ended in the wrong track
         else if(particlePool[i].type != particlePool[i].track && score[particlePool[i].track] > 0) {
-          // score was full? Then slow down next particles
+          // score was full? Then slow down next particles (if speed change allowed)
           if (score[particlePool[i].track] == 3) {
-            _particleSpeed--;
+            if (spdChangeAllowed) _particleSpeed--;
 //            triggerSound(SND_SUBINACTIVE);
           }
-          // Reduce score for this track
-          // RVG commented out for now - so no degrading of the score
-          score[particlePool[i].track]--;
+          // Reduce score (penalty) for this track (if allowed)
+          if (penaltiesAllowed) score[particlePool[i].track]--;
         }
       }
 
