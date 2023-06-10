@@ -2,22 +2,22 @@
 
 #include <Keypad.h>
 #include <LiquidCrystal.h>
+#include <Wire.h>
 
 #define redLED 12 //define the LED pins
 #define greenLED 11
 #define Relay1 9  // HIGH == door OPEN
 #define Relay2 10
 
-
 LiquidCrystal lcd(A0, A1, A2, A3, A4, A5);
 
-#define Password_Lenght 7 // Give enough room for six chars + NULL char
+#define Password_Length 7 // Give enough room for six chars + NULL char
 
 int pos = 0;    // variable to store the servo position
 
-char Data[Password_Lenght]; // 6 is the number of chars it can hold + the null char = 7
-char Master[Password_Lenght] = "052577";
-byte data_count = 0, master_count = 0;
+char Data[Password_Length]; // 6 is the number of chars it can hold + the null char = 7
+char Master[Password_Length] = "052577";
+int data_count = 0, master_count = 0;
 bool Pass_is_good;
 char customKey;
 
@@ -39,6 +39,8 @@ Keypad customKeypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS); //initiali
 
 void setup()
 {
+  Wire.setClock(10000);
+
   lcd.begin(16, 2);
   lcd.print("  Door is reset");
   lcd.setCursor(0, 1);
@@ -84,22 +86,24 @@ void loop()
   {
       if (once) {
          lcd.clear();
+         delay(500);
          lcd.setCursor(0, 0);
-         lcd.print("  Door is Open");
+         lcd.print("  Door is Open  ");
          delay(500);
-         lcd.clear();
-         delay(500);
-//         once = false;
+//         lcd.clear();
+//         delay(500);
+         once = false;
       }
   }
 }
 
 void clearData()
 {
-  while (data_count != 0)
+  while (data_count >= 0)
   { // This can be used for any array size,
     Data[data_count--] = 0; //clear array for new data
   }
+  data_count = 0;
   return;
 }
 
@@ -118,21 +122,28 @@ void Open()
     data_count++; // increment data array by 1 to store new char, also keep track of the number of chars entered
   }
 
-  if (data_count == Password_Lenght - 1) // if the array index is equal to the number of expected chars, compare data to master
+  if (data_count == Password_Length - 1) // if the array index is equal to the number of expected chars, compare data to master
   {
     if (!strcmp(Data, Master)) // equal to (strcmp(Data, Master) == 0)
     {
-      lcd.clear();
-      lcd.print("  Door is Open");
-      digitalWrite(redLED, LOW);
-      digitalWrite(greenLED, HIGH);
+      lcd.setCursor(0, 0);
+      lcd.print("  Door Opening  ");
       digitalWrite(Relay1, HIGH);
       digitalWrite(Relay2, HIGH);
+      delay(1000);
+      
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("  Door is Open  ");
+      digitalWrite(redLED, LOW);
+      digitalWrite(greenLED, HIGH);
+
       door = 2;
     }
     else
     {
       lcd.clear();
+      lcd.setCursor(0, 0);
       lcd.print(" Wrong Passcode");
       delay(2000);
       lcd.clear();
