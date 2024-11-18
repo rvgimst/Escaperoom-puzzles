@@ -47,6 +47,11 @@ DEFINE_GRADIENT_PALETTE( Green_gp ) {
   204,   7, 88,  5,
   255,   0, 24,  0};
 
+DEFINE_GRADIENT_PALETTE( BlueSpike_gp ) {
+    0,   0,   0,  40,
+  127,   0,   0, 255,
+  255,   0,   0,  40};
+
 uint8_t paletteIndex = -1;
 
 void setup() {
@@ -190,7 +195,7 @@ void StartRotatingFastLEDS2(bool dohue=true) {
     if (dohue) {
       fastleds[pos[i]] = CHSV(hue, 200, 255);
     } else {
-      fastleds[pos[i]] = CRGB::Green;
+      fastleds[pos[i]] = CRGB::Blue;
     }
   }
   fadeToBlackBy(fastleds, NUM_FLEDS, 16);
@@ -239,6 +244,29 @@ void StartRotatingFastLEDS3() {
   }
 }
 
+CRGBPalette16 BlueSpikePalette(BlueSpike_gp);
+
+// blue 1/3 bright, 2/3 dim moving according to combined sine wave
+void StartRotatingFastLEDS4() {
+  uint8_t repeat = 12;
+  uint8_t wave = NUM_FLEDS/repeat;
+  // create a sine wave with period of 2 sec (30bpm) to change brightness of the strip
+  // and one with 20bpm
+  // beatsin8(bpm, minvalue, maxvalue, phase offset, timebase
+  uint8_t sinBeat1 = beatsin8(40, 0, wave, 0, 0);
+  uint8_t sinBeat2 = beatsin8(80, 0, wave, 0, 0);
+
+  uint8_t pos = (sinBeat1 + sinBeat2) / 2;
+  // map this pos 'repeat' times over the LED strip
+  for (int i=0; i<repeat; i++) {
+    fastleds[pos+wave*i] = CRGB::Blue;
+  }
+  fadeToBlackBy(fastleds, NUM_FLEDS, 3);
+//  FastLED.setBrightness((sinBeat1 + sinBeat2)/2);
+  FastLED.show();
+
+}
+
 void StartColorBlend() {
   //blending 2 colors. To test effect when moving LEDs
   CRGB col1 = CRGB::Blue;
@@ -285,10 +313,10 @@ void ResetFastLEDs() {
   dynamicBrightnessLevel = 0;
 }
 
-#define NUM_STATES 7
-byte state = 0;
+#define NUM_STATES 8
+byte state = 7;
 
-void loop() {
+void loop0() {
   // this loop tests fade between 2 pulsating effects where colors from 1 blend into the other
   RunPulsatingFastLEDsUsingPalette();
 
@@ -314,7 +342,7 @@ void loop() {
   nblendPaletteTowardPalette( currentPalette, targetPalette, 20);
 }
 
-void loop1() {
+void loop() {
   switch (state) {
     case 0:
       StartPulsatingFastLEDs();
@@ -341,12 +369,15 @@ void loop1() {
       // last 2/3 of pixels in pattern: dim
       StartRotatingFastLEDS3(); // 
       break;
+    case 7:
+      StartRotatingFastLEDS4(); // 
+      break;
   }
   
   EVERY_N_SECONDS(15) {
-    ResetFastLEDs();
-    delay(500);
-    state++;
-    if (state == NUM_STATES) state = 0;
+//    ResetFastLEDs();
+//    delay(500);
+//    state++;
+//    if (state == NUM_STATES) state = 0;
   }
 }
