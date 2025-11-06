@@ -141,7 +141,7 @@ bool spdChangeAllowed = false;
 // Specify whether penalties on score is allowed
 bool penaltiesAllowed = true;
 // number of SECONDS until we switch to easier mode (=disregard penalties)
-unsigned long _easyModeDelay = 300; // 5 minutes (5*60s)
+unsigned long _easyModeDelay = 600; // 5 minutes (5*60s)
 unsigned long _puzzleStartTime = 0; // will be set in setup
 
 // GLOBALS
@@ -228,7 +228,8 @@ int setLEDs(Particle p){
     unsigned int LEDtoLight = ledTrack[p.track][pos];
     if(LEDtoLight != -1) {
       // Note that we don't assign a value, but add to it to allow for cases where two particles might overlap etc.
-      leds[LEDtoLight] += temp;
+      //leds[LEDtoLight] += temp;
+      leds[LEDtoLight] = colours[p.type];
     }
   }
 }
