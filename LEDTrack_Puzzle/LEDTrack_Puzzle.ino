@@ -228,8 +228,11 @@ int setLEDs(Particle p){
     unsigned int LEDtoLight = ledTrack[p.track][pos];
     if(LEDtoLight != -1) {
       // Note that we don't assign a value, but add to it to allow for cases where two particles might overlap etc.
-      //leds[LEDtoLight] += temp;
-      leds[LEDtoLight] = colours[p.type];
+      if (n==0 || n==p.length) { // first or last pixel
+        leds[LEDtoLight] += temp; // use HSV for pixel in bar (dimmed)
+      } else { // middle pixels
+        leds[LEDtoLight] = colours[p.type]; // use RGB on pixel to enforce bright color (e.g. red rather than pink)
+      }
     }
   }
 }
